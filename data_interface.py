@@ -48,7 +48,7 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
                 pp.PROTOCOL_ID,
                 prt.PROTOCOL_TYPE,
                 pp.WEEKDAY,
-                pp.SESSION_DURATION,
+                pp.SESSION_DURATION AS PRESCRIBED_SESSION_DURATION,
                 pp.AR_MODE,
                 DATE(sp.STARTING_DATE) AS SESSION_DATE,
                 sp.STARTING_DATE,
@@ -68,9 +68,9 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
 
         SELECT
             p.PATIENT_ID,
-            p.HOSPITAL_ID,
+            -- p.HOSPITAL_ID,
             p.PATIENT_USER,
-            p.CREATION_TIME AS PATIENT_CREATION_TIME,
+            -- p.CREATION_TIME AS PATIENT_CREATION_TIME,
             -- p.DELETE_TIME,
             -- p.NAME,
             -- p.SURNAME1,
@@ -92,16 +92,27 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             -- p.VERSION,
 
             sd.SESSION_ID,
-            sd.STARTING_DATE,
+            HOUR(sd.STARTING_DATE) AS STARTING_HOUR,
+            CASE
+                WHEN sd.STARTING_DATE IS NULL THEN NULL
+                WHEN HOUR(sd.STARTING_DATE) BETWEEN 5 AND 11 THEN 'MORNING'
+                WHEN HOUR(sd.STARTING_DATE) BETWEEN 12 AND 17 THEN 'AFTERNOON'
+                WHEN HOUR(sd.STARTING_DATE) BETWEEN 18 AND 21 THEN 'EVENING'
+                ELSE 'NIGHT'
+            END AS STARTING_TIME_CATEGORY,
             sd.ENDING_DATE,
             sd.STATUS,
             sd.PLATFORM,
             sd.DEVICE,
             CAST(sd.PROTOCOL_ID AS SIGNED) AS PROTOCOL_ID, -- Ensures integer format
             sd.PROTOCOL_TYPE,
-            sd.WEEKDAY,
-            sd.SESSION_DURATION,
             sd.AR_MODE,
+            sd.WEEKDAY,
+            sd.PRESCRIBED_SESSION_DURATION,
+            r.SESSION_DURATION,
+            r.TOTAL_SUCCESS,
+            r.TOTAL_ERRORS,
+            r.SCORE,
 
             ea1.EMOTIONAL_ANSWER AS EMOTIONAL_ANSWER_1,
             ea2.EMOTIONAL_ANSWER AS EMOTIONAL_ANSWER_2,
@@ -113,6 +124,18 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
 
         LEFT JOIN SessionData sd
             ON p.PATIENT_ID = sd.PATIENT_ID
+
+        LEFT JOIN (
+            SELECT
+                SESSION_ID,
+                MAX(CASE WHEN RECORDING_KEY = 'sessionDuration(seconds)' THEN RECORDING_VALUE END) AS SESSION_DURATION,
+                MAX(CASE WHEN RECORDING_KEY = 'totalSuccess' THEN RECORDING_VALUE END) AS TOTAL_SUCCESS,
+                MAX(CASE WHEN RECORDING_KEY = 'totalErrors' THEN RECORDING_VALUE END) AS TOTAL_ERRORS,
+                MAX(CASE WHEN RECORDING_KEY = 'score' THEN RECORDING_VALUE END) AS SCORE
+            FROM recording_plus
+            GROUP BY SESSION_ID
+        ) r
+            ON sd.SESSION_ID = r.SESSION_ID
 
         LEFT JOIN (
             SELECT PATIENT_ID, ANSWER_DATE, EMOTIONAL_ANSWER, CREATION_TIME
