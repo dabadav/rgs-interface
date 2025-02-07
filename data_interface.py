@@ -1,20 +1,16 @@
-import pymysql
 import pandas as pd
+from sqlalchemy import create_engine
 
-def get_db_connection():
-    """Establish and return a database connection."""
+def get_db_engine():
+    """Create and return a SQLAlchemy engine for MySQL."""
     try:
-        conn = pymysql.connect(
-            host="rgsweb.eodyne.com",
-            user="db_readOnly_prod",
-            password="REDACTED",
-            database="global_prod",
-            port=3306
+        engine = create_engine(
+            "mysql+pymysql://db_readOnly_prod:REDACTED@rgsweb.eodyne.com/global_prod"
         )
-        print("Database connection established")
-        return conn
-    except pymysql.MySQLError as e:
-        print(f"Database connection failed: {e}")
+        print("Database engine created successfully")
+        return engine
+    except Exception as e:
+        print(f"Database engine creation failed: {e}")
         return None
 
 def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
@@ -24,8 +20,8 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
     :param patient_ids: List of patient IDs to filter data.
     :param output_file: Name of the CSV file to save the output.
     """
-    conn = get_db_connection()
-    if not conn:
+    engine = get_db_engine()
+    if not engine:
         return None  # Exit if connection fails
 
     try:
@@ -48,10 +44,6 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             p.HOSPITAL_ID,
             p.PATIENT_USER,
             p.CREATION_TIME AS PATIENT_CREATION_TIME,
-            p.DELETE_TIME,
-            p.NAME,
-            p.SURNAME1,
-            p.SURNAME2,
             p.PARETIC_SIDE,
             p.UPPER_EXTREMITY_TO_TRAIN,
             p.HAND_RAISING_CAPACITY,
@@ -65,8 +57,6 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             p.COMMENTS,
             p.PTN_HEIGHT_CM,
             p.ARM_SIZE_CM,
-            p.DEMO,
-            p.VERSION,
 
             ea1.CREATION_TIME AS EMOTIONAL_ANSWER_CREATION_TIME,
 
@@ -95,21 +85,20 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             WHERE answer_rank = 3
         ) ea3 ON p.PATIENT_ID = ea3.PATIENT_ID AND ea1.CREATION_TIME = ea3.CREATION_TIME
 
-        WHERE p.PATIENT_ID IN ({patient_id_list})
+        WHERE p.PATIENT_ID IN ({patient_id_str})
         ORDER BY p.PATIENT_ID, ea1.CREATION_TIME;
         """
 
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, engine)  # Use SQLAlchemy engine
         df.to_csv(output_file, index=False)
         print(f"Data successfully saved to {output_file}")
 
-    except pymysql.MySQLError as e:
+    except Exception as e:
         print(f"Query execution failed: {e}")
 
     finally:
-        if conn:
-            conn.close()
-            print("Database connection closed")
+        engine.dispose()
+        print("Database engine closed")
 
 def save_to_csv(df, output_file="rgs_interactions.csv"):
     """
