@@ -82,7 +82,8 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             p.HAS_HEMINEGLIGENCE,
             p.GENDER,
             p.SKIN_COLOR,
-            p.BIRTH_DATE,
+            -- p.BIRTH_DATE,
+            TIMESTAMPDIFF(YEAR, p.BIRTH_DATE, sd.SESSION_DATE) AS AGE, -- Age at session time
             p.VIDEOGAME_EXP,
             p.COMPUTER_EXP,
             p.COMMENTS,
@@ -100,7 +101,7 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
                 WHEN HOUR(sd.STARTING_DATE) BETWEEN 18 AND 21 THEN 'EVENING'
                 ELSE 'NIGHT'
             END AS STARTING_TIME_CATEGORY,
-            sd.ENDING_DATE,
+            -- sd.ENDING_DATE,
             sd.STATUS,
             sd.PLATFORM,
             sd.DEVICE,
@@ -110,15 +111,20 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             sd.WEEKDAY,
             sd.PRESCRIBED_SESSION_DURATION,
             r.SESSION_DURATION,
+
+            CASE
+                WHEN sd.PRESCRIBED_SESSION_DURATION > 0 THEN r.SESSION_DURATION / sd.PRESCRIBED_SESSION_DURATION
+                ELSE NULL
+            END AS ADHERENCE,
+
             r.TOTAL_SUCCESS,
             r.TOTAL_ERRORS,
             r.SCORE,
 
             ea1.EMOTIONAL_ANSWER AS EMOTIONAL_ANSWER_1,
             ea2.EMOTIONAL_ANSWER AS EMOTIONAL_ANSWER_2,
-            ea3.EMOTIONAL_ANSWER AS EMOTIONAL_ANSWER_3,
-
-            ea1.CREATION_TIME AS EMOTIONAL_ANSWER_CREATION_TIME
+            ea3.EMOTIONAL_ANSWER AS EMOTIONAL_ANSWER_3
+            -- ea1.CREATION_TIME AS EMOTIONAL_ANSWER_CREATION_TIME
 
         FROM patient p
 
