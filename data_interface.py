@@ -46,6 +46,7 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
                 sp.SESSION_ID,
                 sp.PRESCRIPTION_ID,
                 pp.PROTOCOL_ID,
+                prt.PROTOCOL_TYPE,
                 pp.WEEKDAY,
                 pp.SESSION_DURATION,
                 pp.AR_MODE,
@@ -58,6 +59,10 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             FROM session_plus sp
             JOIN prescription_plus pp
                 ON sp.PRESCRIPTION_ID = pp.PRESCRIPTION_ID
+            JOIN protocol as pr
+                ON pp.PROTOCOL_ID = pr.PROTOCOL_ID
+            JOIN protocol_type as prt
+                ON pr.PROTOCOL_TYPE_ID = prt.PROTOCOL_TYPE_ID
             WHERE sp.STATUS IN ('CLOSED', 'ABORTED')  -- Filters only CLOSED sessions, WHERE sp.STATUS = 'CLOSED' vs WHERE sp.STATUS IN ('CLOSED', 'ABORTED') for all sessions
         )
 
@@ -93,6 +98,7 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             sd.PLATFORM,
             sd.DEVICE,
             CAST(sd.PROTOCOL_ID AS SIGNED) AS PROTOCOL_ID, -- Ensures integer format
+            sd.PROTOCOL_TYPE,
             sd.WEEKDAY,
             sd.SESSION_DURATION,
             sd.AR_MODE,
