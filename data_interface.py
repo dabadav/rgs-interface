@@ -58,7 +58,7 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             FROM session_plus sp
             JOIN prescription_plus pp
                 ON sp.PRESCRIPTION_ID = pp.PRESCRIPTION_ID
-            WHERE sp.STATUS = 'CLOSED'  -- Filters only CLOSED sessions vs WHERE sp.STATUS IN ('CLOSED', 'ABORTED') for all sessions
+            WHERE sp.STATUS IN ('CLOSED', 'ABORTED')  -- Filters only CLOSED sessions, WHERE sp.STATUS = 'CLOSED' vs WHERE sp.STATUS IN ('CLOSED', 'ABORTED') for all sessions
         )
 
         SELECT
@@ -92,7 +92,7 @@ def fetch_rgs_interaction_data(patient_ids, output_file="rgs_interactions.csv"):
             sd.STATUS,
             sd.PLATFORM,
             sd.DEVICE,
-            sd.PROTOCOL_ID,
+            CAST(sd.PROTOCOL_ID AS SIGNED) AS PROTOCOL_ID, -- Ensures integer format
             sd.WEEKDAY,
             sd.SESSION_DURATION,
             sd.AR_MODE,
@@ -156,14 +156,15 @@ def save_to_csv(df, output_file="rgs_interactions.csv"):
 
 # Test the function
 if __name__ == '__main__':
-    patient_ids = [3588]
+    # patient_ids = [3588]
+    # patient_ids = [1508]
 
-    # patient_ids = [
-    #     1347, 1348, 1349, 1454, 1455, 1456, 1457, 1458, 1459, 1460, 1477,
-    #     1478, 1479, 1480, 1481, 1482, 1484, 2332, 2333, 2334, 2335, 2336,
-    #     2422, 2423, 2569, 2607, 2628, 2659, 2660, 2661, 2662, 2861, 2862,
-    #     2864, 2865, 2866, 2882, 2886, 2897, 2930, 2947, 2967, 3026, 3084,
-    #     3085, 3086, 3088, 3089, 3096, 3097, 3163, 3167, 3168, 3316, 3322
-    # ]
+    patient_ids = [
+        1347, 1348, 1349, 1454, 1455, 1456, 1457, 1458, 1459, 1460, 1477,
+        1478, 1479, 1480, 1481, 1482, 1484, 2332, 2333, 2334, 2335, 2336,
+        2422, 2423, 2569, 2607, 2628, 2659, 2660, 2661, 2662, 2861, 2862,
+        2864, 2865, 2866, 2882, 2886, 2897, 2930, 2947, 2967, 3026, 3084,
+        3085, 3086, 3088, 3089, 3096, 3097, 3163, 3167, 3168, 3316, 3322
+    ]
 
     data = fetch_rgs_interaction_data(patient_ids)
