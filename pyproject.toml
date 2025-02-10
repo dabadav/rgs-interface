@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "recsys-interface"
+version = "0.1.0"
+description = "Fetch data from Eodyne production database"
+authors = ["Eodyne Systems"]
+readme = "README.md"
+packages = [{ include = "recsys_interface", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+sqlalchemy = "2.0.35"
+pandas = "2.2.3"
+numpy = "1.26.4"
+seaborn = "0.13.2"
+matplotlib = "3.8.3"
+scikit-learn = "^1.6.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
