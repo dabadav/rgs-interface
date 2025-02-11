@@ -26,5 +26,5 @@ if not OUTPUT_DMS.exists():
 if not OUTPUT_TIMESERIES.exists():
     rgs_data = pd.read_csv(OUTPUT_RGS)
     rgs_dms = pd.read_csv(OUTPUT_DMS)
-    rgs_timeseries = rgs_data.merge(rgs_dms, on=["SESSION_ID"], how="left")
+    rgs_timeseries = rgs_data.merge(rgs_dms, on=["PATIENT_ID","SESSION_ID","PROTOCOL_ID"], how="left")
     save_to_csv(rgs_timeseries, OUTPUT_TIMESERIES)
