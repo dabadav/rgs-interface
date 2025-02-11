@@ -4,7 +4,7 @@ import importlib.resources
 from recsys_interface import sql
 from recsys_interface.db import get_db_engine
 
-def fetch_rgs_interaction_data(patient_ids, rgs_mode="plus", output_file="rgs_interactions.csv"):
+def fetch_rgs_data(patient_ids, rgs_mode="plus", output_file="rgs_interactions.csv"):
     """
     Fetch RGS interaction data for given patient IDs and save it as a CSV file.
 
@@ -16,8 +16,6 @@ def fetch_rgs_interaction_data(patient_ids, rgs_mode="plus", output_file="rgs_in
         return None  # Exit if connection fails
 
     try:
-        # patient_id_str = ','.join(map(str, patient_ids))
-
         # Load SQL query from file
         sql_path = importlib.resources.files(sql) / "query.sql"
 
@@ -38,12 +36,42 @@ def fetch_rgs_interaction_data(patient_ids, rgs_mode="plus", output_file="rgs_in
         df.to_csv(output_file, index=False)
         print(f"Data successfully saved to {output_file}")
 
+        return df
+
     except Exception as e:
         print(f"Query execution failed: {e}")
+
+        return None
 
     finally:
         engine.dispose()
         print("Database engine closed")
+
+        return None
+
+def fetch_dms_data(rgs_mode="plus", output_file="rgs_data_dms.csv"):
+    """Fetch all difficulty modulator data in long format."""
+
+    engine = get_db_engine()
+    if not engine:
+        return None
+
+    sql_query = f"""
+    SELECT
+        SESSION_ID, PATIENT_ID, PROTOCOL_ID, GAME_MODE, SECONDS_FROM_START, PARAMETER_KEY, PARAMETER_VALUE
+    FROM difficulty_modulators_{rgs_mode}
+    """
+
+    with engine.connect() as connection:
+        df = pd.read_sql(text(sql_query), connection)
+
+    print(f"Data of DMs retrieved.")
+
+    df = pivot_difficulty_modulators(df)
+    df.to_csv(output_file, index=False)
+    print(f"Data of DMs, on wide format, successfully saved to {output_file}")
+
+    return df
 
 def fetch_patients_in_hospital(hospital_ids):
     engine = get_db_engine()
@@ -83,10 +111,25 @@ def save_to_csv(df, output_file="rgs_interactions.csv"):
     else:
         print("No data available to save.")
 
+def pivot_difficulty_modulators(df):
+    """Pivot difficulty modulator data from long format to wide format."""
+
+    # Pivot table to convert PARAMETER_KEY values into columns
+    df_pivot = df.pivot_table(
+        index=["SESSION_ID", "PATIENT_ID", "PROTOCOL_ID", "GAME_MODE", "SECONDS_FROM_START"],
+        columns="PARAMETER_KEY",
+        values="PARAMETER_VALUE",
+        aggfunc="max"  # Or use first(), mean(), etc.
+    ).reset_index()
+
+    # Rename columns (flatten MultiIndex)
+    df_pivot.columns.name = None  # Remove index name
+    df_pivot = df_pivot.rename_axis(None, axis=1)  # Reset column names
+
+    return df_pivot
+
 # Test the function
 if __name__ == '__main__':
-    # patient_ids = [3588]
-    # patient_ids = [1508]
 
     patient_ids = [
         1347, 1348, 1349, 1454, 1455, 1456, 1457, 1458, 1459, 1460, 1477,
@@ -96,4 +139,4 @@ if __name__ == '__main__':
         3085, 3086, 3088, 3089, 3096, 3097, 3163, 3167, 3168, 3316, 3322
     ]
 
-    data = fetch_rgs_interaction_data(patient_ids)
+    data = fetch_rgs_data(patient_ids)
