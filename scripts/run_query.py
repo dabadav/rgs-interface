@@ -12,7 +12,6 @@ OUTPUT_PATH = Path("../data")
 OUTPUT_RGS = OUTPUT_PATH / f"rgs_{RGS_MODE}.csv"
 OUTPUT_DMS = OUTPUT_PATH / f"rgs_dms_{RGS_MODE}.csv"
 OUTPUT_TIMESERIES = OUTPUT_PATH / f"rgs_timeseries_{RGS_MODE}.csv"
-
 # Fetch patient IDs in the hospital AND fetch RGS interaction data
 
 # If file does not exist
