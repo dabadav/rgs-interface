@@ -11,7 +11,7 @@ This script fetches Rehabilitation Gaming System (RGS) data for patients based o
 ## Requirements
 Ensure you have Python installed and the required dependencies:
 ```sh
-pip install pandas pathlib argparse recsys_interface
+pip install
 ```
 
 ## Usage
