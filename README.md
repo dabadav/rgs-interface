@@ -11,7 +11,7 @@ This script fetches Rehabilitation Gaming System (RGS) data for patients based o
 ## Requirements
 Ensure you have Python installed and the required dependencies:
 ```sh
-pip install
+pip install recsys_interface-0.1.0.tar.gz
 ```
 
 ## Usage
