@@ -4,7 +4,7 @@ import importlib.resources
 from recsys_interface import sql
 from recsys_interface.db import get_db_engine
 
-def fetch_rgs_data(patient_ids, rgs_mode="plus", output_file="rgs_interactions.csv"):
+def fetch_rgs_data(patient_ids, rgs_mode="plus", include_dms=False, output_file=f"rgs_interactions.csv"):
     """
     Fetch RGS interaction data for given patient IDs and save it as a CSV file.
 
@@ -33,10 +33,16 @@ def fetch_rgs_data(patient_ids, rgs_mode="plus", output_file="rgs_interactions.c
         with engine.connect() as connection:
             df = pd.read_sql(query_text, connection, params=params)
 
-        df.to_csv(output_file, index=False)
-        print(f"Data successfully saved to {output_file}")
+        if include_dms:
+            output_file_dms = output_file.replace(".csv", f"_dms.csv")
+            df_dms = fetch_dms_data(rgs_mode=rgs_mode, output_file=output_file)
+            df_all = df.merge(df_dms, on=["PATIENT_ID","SESSION_ID","PROTOCOL_ID"], how="left")
+            df_all.to_csv(output_file_dms, index=False)
 
-        return df
+        else:
+            df.to_csv(output_file, index=False)
+            print(f"Data successfully saved to {output_file}")
+            return df
 
     except Exception as e:
         print(f"Query execution failed: {e}")

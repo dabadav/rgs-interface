@@ -76,5 +76,5 @@ def data_table(df, output_filename = "data_summary.html"):
 
 if __name__ == '__main__':
     data_path = Path("../data")
-    df = pd.read_csv(data_path / "rgs_timeseries_app.csv")
+    df = pd.read_csv(data_path / "rgs_plus_raj.csv")
     data_table(df, data_path / "data_summary_timeseries_app.html")

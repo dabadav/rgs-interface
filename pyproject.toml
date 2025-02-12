@@ -16,6 +16,11 @@ matplotlib = "3.8.3"
 scikit-learn = "^1.6.1"
 pymysql = "^1.1.1"
 python-dotenv = "^1.0.1"
+pyyaml = "^6.0.2"
+argparse = "^1.4.0"
+
+[tool.poetry.scripts]
+fetch-rgs = "recsys_interface.cli:main"  # Adds a CLI command
 
 [build-system]
 requires = ["poetry-core"]
