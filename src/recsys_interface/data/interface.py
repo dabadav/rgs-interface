@@ -35,9 +35,10 @@ def fetch_rgs_data(patient_ids, rgs_mode="plus", include_dms=False, output_file=
 
         if include_dms:
             output_file_dms = output_file.replace(".csv", f"_dms.csv")
-            df_dms = fetch_dms_data(rgs_mode=rgs_mode, output_file=output_file)
+            output_file_dms_all = output_file.replace(".csv", f"_dms_all.csv")
+            df_dms = fetch_dms_data(rgs_mode=rgs_mode, output_file=output_file_dms)
             df_all = df.merge(df_dms, on=["PATIENT_ID","SESSION_ID","PROTOCOL_ID"], how="left")
-            df_all.to_csv(output_file_dms, index=False)
+            df_all.to_csv(output_file_dms_all, index=False)
 
         else:
             df.to_csv(output_file, index=False)
