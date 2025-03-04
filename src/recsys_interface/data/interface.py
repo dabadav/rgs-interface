@@ -39,6 +39,7 @@ def fetch_rgs_data(patient_ids, rgs_mode="plus", include_dms=False, output_file=
             df_dms = fetch_dms_data(rgs_mode=rgs_mode, output_file=output_file_dms)
             df_all = df.merge(df_dms, on=["PATIENT_ID","SESSION_ID","PROTOCOL_ID"], how="left")
             df_all.to_csv(output_file_dms_all, index=False)
+            return df_all
 
         else:
             df.to_csv(output_file, index=False)
@@ -47,14 +48,11 @@ def fetch_rgs_data(patient_ids, rgs_mode="plus", include_dms=False, output_file=
 
     except Exception as e:
         print(f"Query execution failed: {e}")
-
         return None
 
     finally:
         engine.dispose()
         print("Database engine closed")
-
-        return None
 
 def fetch_dms_data(rgs_mode="plus", output_file="rgs_data_dms.csv"):
     """Fetch all difficulty modulator data in long format."""
@@ -100,6 +98,34 @@ def fetch_patients_in_hospital(hospital_ids):
 
     except Exception as e:
         print(f"Query execution failed: {e}")
+
+    finally:
+        engine.dispose()
+        print("Database engine closed")
+
+def fetch_patients_by_str(pattern):
+    engine = get_db_engine()
+    if not engine:
+        return None  # Exit if connection fails
+
+    try:
+        # Use parameterized queries to avoid '%' format errors
+        query = text("""
+        SELECT *
+        FROM patient
+        WHERE PATIENT_USER LIKE :pattern;
+        """)
+
+        # Execute query using SQLAlchemy's connection
+        with engine.connect() as connection:
+            df = pd.read_sql(query, connection, params={"pattern": f"%{pattern}%"})
+
+        patient_ids = df["PATIENT_ID"].tolist()
+        return patient_ids, df
+
+    except Exception as e:
+        print(f"Query execution failed: {e}")
+        return None
 
     finally:
         engine.dispose()

@@ -1,9 +1,5 @@
 import os
 from sqlalchemy import create_engine
-from dotenv import load_dotenv
-
-# Load environment variables from `.env`
-load_dotenv()
 
 def get_db_engine():
     """Create and return a SQLAlchemy engine for MySQL."""
