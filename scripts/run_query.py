@@ -22,5 +22,5 @@ OUTPUT_RGS = OUTPUT_PATH / f"rgs_{RGS_MODE}_{date.today()}.csv"
 # Run code
 print("Running...")
 patient_ids = PATIENT_LIST
-rgs_data = fetch_rgs_data(patient_ids, rgs_mode=RGS_MODE, output_file=OUTPUT_RGS)
-# dms_data = fetch_timeseries_data(patient_ids, rgs_mode="app")
+# rgs_data = fetch_rgs_data(patient_ids, rgs_mode=RGS_MODE, output_file=OUTPUT_RGS)
+dms_data = fetch_timeseries_data(patient_ids, rgs_mode="app")
