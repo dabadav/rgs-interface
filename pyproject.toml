@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rgs-interface"
-version = "0.2.0"
+version = "0.2.1"
 description = "Fetch data from Eodyne production database"
 authors = ["Eodyne Systems"]
 readme = "README.md"

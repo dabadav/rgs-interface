@@ -30,7 +30,31 @@ def fetch_timeseries_data(patient_ids, rgs_mode="plus", output_file=None):
     """
     Fetch timeseries RGS interaction data for given patient IDs.
     """
-    query_file="query_timeseries.sql"
+    # Hack as there is no multiindex in across tables
+    dm = fetch_dm_data(patient_ids, rgs_mode)
+    pe = fetch_pe_data(patient_ids, rgs_mode)
+    return dm.merge(
+        pe,
+        on=["SESSION_ID", "PATIENT_ID", "PROTOCOL_ID", "GAME_MODE", "SECONDS_FROM_START"],
+    )
+
+def fetch_dm_data(patient_ids, rgs_mode="plus", output_file=None):
+    """
+    Fetch timeseries RGS interaction data for given patient IDs.
+    """
+    query_file="query_dm.sql"
+    return _fetch(
+        query=query_file,
+        params={"patient_ids": tuple(patient_ids)},
+        rgs_mode=rgs_mode,
+        output_file=output_file
+    )
+
+def fetch_pe_data(patient_ids, rgs_mode="plus", output_file=None):
+    """
+    Fetch timeseries RGS interaction data for given patient IDs.
+    """
+    query_file="query_pe.sql"
     return _fetch(
         query=query_file,
         params={"patient_ids": tuple(patient_ids)},
