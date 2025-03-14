@@ -1,6 +1,9 @@
+import sys
+sys.path.append("..")
+
 from pathlib import Path
-from recsys_interface.data.interface import fetch_rgs_data, fetch_dms_data, fetch_patients_in_hospital, save_to_csv
-import pandas as pd
+from recsys_interface.data.interface import fetch_rgs_data, fetch_timeseries_data
+from datetime import datetime, date
 
 RGS_MODE = "app"
 HOSPITAL_LIST = [
@@ -12,11 +15,12 @@ PATIENT_LIST = [
     2913, 2925, 2926, 2937, 2954, 2955, 2956, 2957, 2958, 2959, 2960, 2961,
     2962, 2963, 3081, 3210, 3213, 3222, 3229, 3231, 3318, 3432
 ]
+
 OUTPUT_PATH = Path("../data")
-OUTPUT_RGS = OUTPUT_PATH / f"rgs_{RGS_MODE}_raj.csv"
-OUTPUT_DMS = OUTPUT_PATH / f"rgs_dms_{RGS_MODE}_raj.csv"
-OUTPUT_TIMESERIES = OUTPUT_PATH / f"rgs_timeseries_{RGS_MODE}.csv"
+OUTPUT_RGS = OUTPUT_PATH / f"rgs_{RGS_MODE}_{date.today()}.csv"
 
 # Run code
+print("Running...")
 patient_ids = PATIENT_LIST
 rgs_data = fetch_rgs_data(patient_ids, rgs_mode=RGS_MODE, output_file=OUTPUT_RGS)
+# dms_data = fetch_timeseries_data(patient_ids, rgs_mode="app")

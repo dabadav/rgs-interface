@@ -3,10 +3,27 @@ from sqlalchemy import text
 import importlib.resources
 from recsys_interface import sql
 from recsys_interface.db import get_db_engine
+# import time
+# import functools
+# def timeit(func):
+#     """Decorator to measure execution time of a function."""
+#     @functools.wraps(func)
+#     def wrapper(*args, **kwargs):
+#         start_time = time.perf_counter()
+#         result = func(*args, **kwargs)
+#         end_time = time.perf_counter()
+#         elapsed_time = end_time - start_time
+#         print(f"Function '{func.__name__}' executed in {elapsed_time:.4f} seconds")
+#         return result
+#     return wrapper
 
-def fetch_rgs_data(patient_ids, rgs_mode="plus", include_dms=False, output_file=f"rgs_interactions.csv"):
+###########################
+### ---- Get Data ---- ####
+###########################
+
+def _fetch_data(patient_ids, rgs_mode="plus", query_file="query.sql", output_file=None):
     """
-    Fetch RGS interaction data for given patient IDs and save it as a CSV file.
+    Base method to fetch RGS interaction data for given patient IDs and save it as a CSV file.
 
     :param patient_ids: List of patient IDs to filter data.
     :param output_file: Name of the CSV file to save the output.
@@ -17,7 +34,7 @@ def fetch_rgs_data(patient_ids, rgs_mode="plus", include_dms=False, output_file=
 
     try:
         # Load SQL query from file
-        sql_path = importlib.resources.files(sql) / "query.sql"
+        sql_path = importlib.resources.files(sql) / query_file
 
         with sql_path.open("r") as file:
             sql_template = file.read()
@@ -31,20 +48,13 @@ def fetch_rgs_data(patient_ids, rgs_mode="plus", include_dms=False, output_file=
 
         # Execute the query
         with engine.connect() as connection:
-            df = pd.read_sql(query_text, connection, params=params)
+            df = pd.read_sql(query_text, connection, params=params, dtype_backend='numpy_nullable')
 
-        if include_dms:
-            output_file_dms = output_file.replace(".csv", f"_dms.csv")
-            output_file_dms_all = output_file.replace(".csv", f"_dms_all.csv")
-            df_dms = fetch_dms_data(rgs_mode=rgs_mode, output_file=output_file_dms)
-            df_all = df.merge(df_dms, on=["PATIENT_ID","SESSION_ID","PROTOCOL_ID"], how="left")
-            df_all.to_csv(output_file_dms_all, index=False)
-            return df_all
-
-        else:
+        if output_file:
             df.to_csv(output_file, index=False)
             print(f"Data successfully saved to {output_file}")
-            return df
+
+        return df
 
     except Exception as e:
         print(f"Query execution failed: {e}")
@@ -54,29 +64,24 @@ def fetch_rgs_data(patient_ids, rgs_mode="plus", include_dms=False, output_file=
         engine.dispose()
         print("Database engine closed")
 
-def fetch_dms_data(rgs_mode="plus", output_file="rgs_data_dms.csv"):
-    """Fetch all difficulty modulator data in long format."""
-
-    engine = get_db_engine()
-    if not engine:
-        return None
-
-    sql_query = f"""
-    SELECT
-        SESSION_ID, PATIENT_ID, PROTOCOL_ID, GAME_MODE, SECONDS_FROM_START, PARAMETER_KEY, PARAMETER_VALUE
-    FROM difficulty_modulators_{rgs_mode}
+def fetch_rgs_data(patients_ids, rgs_mode="plus", output_file=None):
     """
+    Fetch RGS interaction data for given patient IDs and save it as a CSV file.
+    
+    :param patients_ids: List of patient IDs to filter data.
+    :param rgs_mode: RGS mode to filter data.
+    :param output_file: Name of the CSV file to save the
 
-    with engine.connect() as connection:
-        df = pd.read_sql(text(sql_query), connection)
+    :return: DataFrame containing the RGS interaction data.
+    """
+    query_file="query.sql"
+    return _fetch_data(patient_ids=patients_ids, rgs_mode=rgs_mode, query_file=query_file, output_file=output_file)
 
-    print(f"Data of DMs retrieved.")
+def fetch_timeseries_data(patients_ids, rgs_mode="plus", output_file=None):
+    query_file="query_timeseries.sql"
+    return _fetch_data(patient_ids=patients_ids, rgs_mode=rgs_mode, query_file=query_file, output_file=output_file)
 
-    df = pivot_difficulty_modulators(df)
-    df.to_csv(output_file, index=False)
-    print(f"Data of DMs, on wide format, successfully saved to {output_file}")
-
-    return df
+### ---- Get IDs ---- ####
 
 def fetch_patients_in_hospital(hospital_ids):
     engine = get_db_engine()
@@ -130,36 +135,6 @@ def fetch_patients_by_str(pattern):
     finally:
         engine.dispose()
         print("Database engine closed")
-
-def save_to_csv(df, output_file="rgs_interactions.csv"):
-    """
-    Save a DataFrame to CSV.
-
-    :param df: Pandas DataFrame to save.
-    :param output_file: File name to save as CSV.
-    """
-    if df is not None and not df.empty:
-        df.to_csv(output_file, index=False)
-        print(f"Data saved to {output_file}")
-    else:
-        print("No data available to save.")
-
-def pivot_difficulty_modulators(df):
-    """Pivot difficulty modulator data from long format to wide format."""
-
-    # Pivot table to convert PARAMETER_KEY values into columns
-    df_pivot = df.pivot_table(
-        index=["SESSION_ID", "PATIENT_ID", "PROTOCOL_ID", "GAME_MODE", "SECONDS_FROM_START"],
-        columns="PARAMETER_KEY",
-        values="PARAMETER_VALUE",
-        aggfunc="max"  # Or use first(), mean(), etc.
-    ).reset_index()
-
-    # Rename columns (flatten MultiIndex)
-    df_pivot.columns.name = None  # Remove index name
-    df_pivot = df_pivot.rename_axis(None, axis=1)  # Reset column names
-
-    return df_pivot
 
 # Test the function
 if __name__ == '__main__':
