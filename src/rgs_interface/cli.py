@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path
-from recsys_interface.config import DB_USER, DB_PASS
-from recsys_interface.data.interface import fetch_rgs_data, fetch_patients_in_hospital
+from rgs_interface.data.interface import fetch_rgs_data, fetch_timeseries_data, fetch_patients_by_hospital
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch RGS data")
@@ -28,7 +27,7 @@ def main():
     elif args.mode == "hospital":
         if not args.hospital:
             raise ValueError("Provide --hospital IDs in 'hospital' mode.")
-        patient_ids = fetch_patients_in_hospital(args.hospital)
+        patient_ids = fetch_patients_by_hospital(args.hospital)
 
     # Determine output file
     if args.output_file:
@@ -37,7 +36,12 @@ def main():
         output_file = Path(f"rgs_{args.rgs_mode}.csv")  # Default file naming
 
     # Fetch data and save it
-    fetch_rgs_data(patient_ids, rgs_mode=args.rgs_mode, output_file=output_file, include_dms=args.dms)
+    fetch_rgs_data(patient_ids, rgs_mode=args.rgs_mode, output_file=output_file)
+
+    if args.dms:
+        dms_file = Path(f"rgs_{args.rgs_mode}_timeseries.csv")
+        fetch_timeseries_data(patient_ids, rgs_mode=args.rgs_mode, output_file=dms_file)
+        print(f"Data dms saved to {dms_file}")
 
     print(f"Data saved to {output_file}")
 

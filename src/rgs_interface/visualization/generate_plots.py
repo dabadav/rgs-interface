@@ -3,7 +3,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from recsys_interface.data.preprocess import preprocess_features
+from rgs_interface.data.preprocess import preprocess_features
 
 def plot_adherence(df, title, save_path):
        fig, axes = plt.subplots(1, 3, figsize=(15, 5))

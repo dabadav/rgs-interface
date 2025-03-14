@@ -1,8 +1,8 @@
 import pandas as pd
 from sqlalchemy import text
 import importlib.resources
-from recsys_interface import sql
-from recsys_interface.db import get_db_engine
+from rgs_interface import sql
+from rgs_interface.db import get_db_engine
 
 ###########################
 ### ---- Get Data ---- ####

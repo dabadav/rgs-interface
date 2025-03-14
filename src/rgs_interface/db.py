@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from recsys_interface.config import load_config
+from rgs_interface.config import load_config
 
 def get_db_engine():
     """Create and return a SQLAlchemy engine for MySQL."""
