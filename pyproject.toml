@@ -20,7 +20,7 @@ pyyaml = "^6.0.2"
 argparse = "^1.4.0"
 
 [tool.poetry.scripts]
-fetch-rgs = "recsys_interface.cli:main"  # Adds a CLI command
+fetch-rgs = "rgs_interface.cli:main"  # Adds a CLI command
 
 [build-system]
 requires = ["poetry-core"]

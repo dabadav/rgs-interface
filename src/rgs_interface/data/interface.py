@@ -21,7 +21,8 @@ def fetch_rgs_data(patient_ids, rgs_mode="plus", output_file=None):
     query_file="query.sql"
     return _fetch(
         query=query_file,
-        params={"rgs_mode": rgs_mode, "patient_ids": tuple(patient_ids)},
+        params={"patient_ids": tuple(patient_ids)},
+        rgs_mode=rgs_mode,
         output_file=output_file
     )
 
@@ -32,7 +33,8 @@ def fetch_timeseries_data(patient_ids, rgs_mode="plus", output_file=None):
     query_file="query_timeseries.sql"
     return _fetch(
         query=query_file,
-        params={"rgs_mode": rgs_mode, "patient_ids": tuple(patient_ids)},
+        params={"patient_ids": tuple(patient_ids)},
+        rgs_mode=rgs_mode,
         output_file=output_file
     )
 
@@ -67,7 +69,7 @@ def fetch_patients():
 
 ### ---- Handler ---- ####
 
-def _fetch(query, params=None, output_file=None, dtype_backend="numpy_nullable"):
+def _fetch(query, params=None, rgs_mode=None, output_file=None, dtype_backend="numpy_nullable"):
     """
     Generalized function to fetch data from the database using either a SQL file name or a raw query string.
 
@@ -92,6 +94,9 @@ def _fetch(query, params=None, output_file=None, dtype_backend="numpy_nullable")
             sql_query = query
 
         # Use parameterized query
+        if rgs_mode:
+            sql_query = sql_query.format(rgs_mode=rgs_mode)
+        
         query_text = text(sql_query)
 
         # Execute query
