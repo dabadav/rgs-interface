@@ -14,8 +14,8 @@ pip install recsys_interface-0.2.0.tar.gz
 
 Method Name               | Description |
 |---------------------------|-------------|
-| `fetch_rgs_data()`       | Retrieves RGS data for a list of patient IDs. Allows filtering by `rgs_mode`. |
-| `fetch_timeseries_data()` | Retrieves time-series RGS data for specified patient IDs, allowing filtering by `rgs_mode`. |
+| `fetch_rgs_data()`       | Retrieves RGS data for a list of patient IDs. |
+| `fetch_timeseries_data()` | Retrieves time-series RGS data for specified patient IDs. |
 | `fetch_patients()`       | Retrieves all patient records from the database. |
 | `fetch_patients_by_hospital()` | Retrieves patient IDs based on a list of hospital IDs. |
 | `fetch_patients_by_name()` | Retrieves patient IDs based on a pattern match in the `PATIENT_USER` field using SQL `LIKE`. |
