@@ -90,8 +90,9 @@ def load_config():
     else:
         raise RuntimeError("Database credentials are not set in environment variables or config file, and interactive input is not possible.")
 
-credentials = load_config()
-DB_USER = credentials["DB_USER"]
-DB_PASS = credentials["DB_PASS"]
-DB_HOST = credentials["DB_HOST"]
-DB_NAME = credentials["DB_NAME"]
+if __name__ == "__main__":
+    credentials = load_config()
+    DB_USER = credentials["DB_USER"]
+    DB_PASS = credentials["DB_PASS"]
+    DB_HOST = credentials["DB_HOST"]
+    DB_NAME = credentials["DB_NAME"]
