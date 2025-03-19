@@ -57,7 +57,7 @@ def get_config():
     return None
 
 def load_config():
-    config = load_config()
+    config = get_config()
     
     if config:
         return config
