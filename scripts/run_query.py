@@ -2,7 +2,7 @@ import sys
 sys.path.append("..")
 
 from pathlib import Path
-from recsys_interface.data.interface import fetch_rgs_data, fetch_timeseries_data
+from recsys_interface.data.interface import DatabaseInterface
 from datetime import datetime, date
 
 RGS_MODE = "app"
@@ -22,5 +22,6 @@ OUTPUT_RGS = OUTPUT_PATH / f"rgs_{RGS_MODE}_{date.today()}.csv"
 # Run code
 print("Running...")
 patient_ids = PATIENT_LIST
-# rgs_data = fetch_rgs_data(patient_ids, rgs_mode=RGS_MODE, output_file=OUTPUT_RGS)
-dms_data = fetch_timeseries_data(patient_ids, rgs_mode="app")
+db_handler = DatabaseInterface()
+# rgs_data = db_handler.fetch_rgs_data(patient_ids, rgs_mode=RGS_MODE, output_file=OUTPUT_RGS)
+dms_data = db_handler.fetch_timeseries_data(patient_ids, rgs_mode="app")

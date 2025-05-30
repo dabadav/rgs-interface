@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from rgs_interface.data.interface import fetch_rgs_data, fetch_timeseries_data, fetch_patients_by_hospital
+from rgs_interface.data.interface import DatabaseInterface
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch RGS data")
@@ -13,6 +13,8 @@ def main():
     parser.add_argument("--dms", type=lambda x: (str(x).lower() == "true"), default=False, help="Include DMS timeseries data (True/False).")
 
     args = parser.parse_args()
+
+    db_handler = DatabaseInterface()
 
     # Determine patient list
     if args.mode == "patients":
@@ -27,7 +29,7 @@ def main():
     elif args.mode == "hospital":
         if not args.hospital:
             raise ValueError("Provide --hospital IDs in 'hospital' mode.")
-        patient_ids = fetch_patients_by_hospital(args.hospital)
+        patient_ids = db_handler.fetch_patients_by_hospital(args.hospital)
 
     # Determine output file
     if args.output_file:
@@ -35,12 +37,13 @@ def main():
     else:
         output_file = Path(f"rgs_{args.rgs_mode}.csv")  # Default file naming
 
+    
     # Fetch data and save it
-    fetch_rgs_data(patient_ids, rgs_mode=args.rgs_mode, output_file=output_file)
+    db_handler.fetch_rgs_data(patient_ids, rgs_mode=args.rgs_mode, output_file=output_file)
 
     if args.dms:
         dms_file = Path(f"rgs_{args.rgs_mode}_timeseries.csv")
-        fetch_timeseries_data(patient_ids, rgs_mode=args.rgs_mode, output_file=dms_file)
+        db_handler.fetch_timeseries_data(patient_ids, rgs_mode=args.rgs_mode, output_file=dms_file)
         print(f"Data dms saved to {dms_file}")
 
     print(f"Data saved to {output_file}")
