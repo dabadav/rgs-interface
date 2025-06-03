@@ -1,21 +1,10 @@
 import pandas as pd
 from sqlalchemy import text, exc
+from typing import Union 
 import importlib.resources
-from rgs_interface import sql
+from rgs_interface import sql 
 from rgs_interface.db import get_db_engine 
-
-# Exceptions 
-class DatabaseOperationError(Exception):
-     """Custom exception for database operation failures."""
-     pass
-
-class DatabaseQueryError(DatabaseOperationError):
-     """Custom exception for query execution failures."""
-     pass
-
-class DatabaseWriteError(DatabaseOperationError):
-    """Custom exception for write operation failures."""
-    pass
+from rgs_interface.data.schemas import PrescriptionStagingRow, RecsysMetricsRow 
 
 
 class DatabaseInterface:
@@ -37,10 +26,10 @@ class DatabaseInterface:
         
         :param patients_ids: List of patient IDs to filter data. (Original typo in param name)
         :param rgs_mode: RGS mode to filter data.
-        :param output_file: Name of the CSV file to save the
-
+        :param output_file: Name of the CSV file to save th
         :return: DataFrame containing the RGS interaction data.
         """
+
         query_file="query.sql"
         return self._fetch(
             query=query_file,
@@ -56,8 +45,7 @@ class DatabaseInterface:
         # Hack as there is no multiindex in across tables
         dm = self.fetch_dm_data(patient_ids, rgs_mode)
         pe = self.fetch_pe_data(patient_ids, rgs_mode)
-        
-
+    
         if dm is None or pe is None:
             print("Error in fetch_timeseries_data: Failed to retrieve dm or pe data.")
             return None 
@@ -66,7 +54,6 @@ class DatabaseInterface:
             pe,
             on=["SESSION_ID", "PATIENT_ID", "PROTOCOL_ID", "GAME_MODE", "SECONDS_FROM_START"],
         )
-
 
     def fetch_dm_data(self, patient_ids, rgs_mode="plus", output_file=None):
         """
@@ -99,9 +86,8 @@ class DatabaseInterface:
         Fetch list of patient IDs from a given list of hospital IDs.
         """
         if not isinstance(hospital_ids, (list, tuple)):
-            hospital_ids = [hospital_ids] # Ensure it's a list/tuple for parameterization
+            hospital_ids = [hospital_ids]
 
-        # The SQL query now uses a named parameter for the IN clause - I know this is not necessary but it is best practice to avoid SQL injections.
         sql_query_string = """
         SELECT PATIENT_ID
         FROM patient
@@ -126,17 +112,16 @@ class DatabaseInterface:
             query="SELECT * FROM patient"
         )
 
-    ### ---- Handler ---- ####
+    ### ---- Read Handler ---- ####
 
     def _fetch(self, query, params=None, rgs_mode=None, output_file=None, dtype_backend="numpy_nullable"):
         """
-        Generalized function to fetch data from the database using either a SQL file name or a raw query string.
-
+        Generalized function to fetch data from the database using either a SQL file name or a raw query string 
         :param query: SQL file name (string ending with '.sql') OR raw SQL query as a string.
         :param params: Dictionary of parameters to safely format the query.
         :param output_file: CSV file to save the results.
         :param dtype_backend: Backend for pandas DataFrame dtype (default: numpy_nullable).
-        
+
         :return: DataFrame with query results.
         """
         if not self.engine:
@@ -144,41 +129,117 @@ class DatabaseInterface:
             return None
 
         try:
-            # Accepts SQL file or str
             if query.endswith(".sql"):
                 sql_path = importlib.resources.files(sql) / query
                 with sql_path.open("r") as file:
                     sql_query = file.read()
             else:
                 sql_query = query
-
-            if rgs_mode:
+            
+            if rgs_mode: 
                 sql_query = sql_query.format(rgs_mode=rgs_mode)
             
             query_text = text(sql_query)
-
-            # Execute query
             with self.engine.connect() as connection:
                 df = pd.read_sql(query_text, connection, params=params, dtype_backend=dtype_backend)
 
             if output_file:
                 df.to_csv(output_file, index=False)
                 print(f"Data successfully saved to {output_file}")
-
             return df
-
         except Exception as e:
             print(f"Query execution failed: {e}")
             return None
 
-
     ### ---- Write Operations ---- ###
 
+    def add_prescription_staging_entry(self, entry: PrescriptionStagingRow) -> Union[int, None]:
+        """
+        Adds a new entry to the prescription_staging table and returns the new ID.
+        """
+        if not isinstance(entry, PrescriptionStagingRow):
+            print("Error: entry must be an instance of PrescriptionStagingRow.")
+            return None
+
+        sql_query = """
+        INSERT INTO prescription_staging (
+            PRESCRIPTION_STAGING_ID, PATIENT_ID, PROTOCOL_ID, STARTING_DATE, ENDING_DATE, WEEKDAY,
+            SESSION_DURATION, RECOMMENDATION_ID, WEEKS_SINCE_START, STATUS
+        ) VALUES (
+            NULL, :patient_id, :protocol_id, :starting_date, :ending_date, :weekday,
+            :session_duration, :recommendation_id, :weeks_since_start, :status
+        )
+        """
+        if not self.engine:
+            print("Cannot add prescription staging entry: Database engine not available.")
+            return None
+        
+        new_id = None
+        try:
+            params = entry.to_params_dict()
+            with self.engine.connect() as connection:
+                with connection.begin() as transaction:
+                    result = connection.execute(text(sql_query), parameters=params)
+                    if result.rowcount == 1:
+                        new_id = result.lastrowid  
+                    transaction.commit()            
+            return new_id
+        
+        except (TypeError, ValueError) as ve: 
+            print(f"Data validation error for prescription staging entry: {ve}")
+            return None
+        except exc.SQLAlchemyError as e:
+            print(f"Failed to add prescription staging entry (SQLAlchemyError): {e}")
+            return None
+        except Exception as e:
+            print(f"An unexpected error occurred while adding prescription staging entry: {e}")
+            return None
+
+    def add_recsys_metric_entry(self, entry: RecsysMetricsRow) -> Union[int, None]:
+        """
+        Adds a new entry to the recsys_metrics table and returns the new ID.
+        """
+        if not isinstance(entry, RecsysMetricsRow):
+            print("Error: entry must be an instance of RecsysMetricsRow.")
+            return None
+
+        sql_query = """
+       INSERT INTO recsys_metrics (
+            RECSYS_METRICS_ID, PATIENT_ID, PROTOCOL_ID, RECOMMENDATION_ID, METRIC_DATE, METRIC_KEY, METRIC_VALUE
+        ) VALUES (
+            NULL, :patient_id, :protocol_id, :recommendation_id, :metric_date, :metric_key, :metric_value
+        )
+        """
+        if not self.engine:
+            print("Cannot add recsys metric entry: Database engine not available.")
+            return None
+
+        new_id = None
+        try:
+            params = entry.to_params_dict() 
+            with self.engine.connect() as connection:
+                with connection.begin() as transaction:
+                    result = connection.execute(text(sql_query), parameters=params)
+                    if result.rowcount == 1:
+                        new_id = result.lastrowid  
+                    transaction.commit()            
+            return new_id
+        
+        except (TypeError, ValueError) as ve:
+            print(f"Data validation error for recsys metric entry: {ve}")
+            return None
+        except exc.SQLAlchemyError as e:
+            print(f"Failed to add recsys metric entry (SQLAlchemyError): {e}")
+            return None
+        except Exception as e:
+            print(f"An unexpected error occurred while adding recsys metric entry: {e}")
+            return None
+
+    ### ---- Write Handler ---- ####
     def _execute_write(self, query, params=None): 
         """
         Generalized private method to execute a write operation (INSERT, UPDATE, DELETE).
-        Can take a .sql file name or a raw SQL query string. Uses transactions.
-
+        Can take a .sql file name or a raw SQL query string. Uses transactions  
         :param query: SQL file name (string ending with '.sql') OR raw SQL query as a string.
         :param params: Dictionary of parameters to safely bind to the query.
         :return: Number of rows affected, or None if an error occurs.
@@ -188,6 +249,7 @@ class DatabaseInterface:
             return None
 
         rows_affected = None
+        sql_query_str = ""
         try:
             if query.endswith(".sql"):
                 sql_path = importlib.resources.files(sql) / query
@@ -204,19 +266,18 @@ class DatabaseInterface:
                     if result.is_insert or result.is_update or result.is_delete:
                         rows_affected = result.rowcount
                     transaction.commit()
-                print(f"Write operation successful. Rows affected: {rows_affected}")
+                print(f"Write operation successful. Rows affected: {rows_affected}") 
             return rows_affected
-        except FileNotFoundError: # Specific exception for missing .sql file
+        except FileNotFoundError:
             print(f"Database write operation failed: SQL file '{query}' not found.")
             return None
-        except exc.SQLAlchemyError as e: # More specific SQLAlchemy error
-            print(f"Database write operation failed (SQLAlchemyError): {e}")
+        except exc.SQLAlchemyError as e:
+            print(f"Database write operation failed (SQLAlchemyError) for query '{sql_query_str[:100]}...': {e}")
             return None
-        except Exception as e: # Catch other potential errors
-            print(f"Database write operation failed (General Exception): {e}")
+        except Exception as e:
+            print(f"Database write operation failed (General Exception) for query '{sql_query_str[:100]}...': {e}")
             return None
-
-
+        
     def close(self):
         """
         Disposes of the database engine and its connection pool.
