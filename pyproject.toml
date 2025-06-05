@@ -1,27 +1,29 @@
-[tool.poetry]
+[project]
 name = "rgs-interface"
-version = "0.2.2"
+version = "0.3.0"
 description = "Fetch data from Eodyne production database"
-authors = ["Eodyne Systems"]
+authors = [
+    {name = "Eodyne Systems SL"}
+]
+license = {text = "MIT"}
 readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "pandas[parquet]>=2.2.3,<3.0.0",
+    "sqlalchemy>=2.0.35,<3.0.0",
+    "numpy>=1.26.4,<2.0.0",
+    "seaborn>=0.13.2,<0.14.0",
+    "matplotlib>=3.8.3,<4.0.0",
+    "scikit-learn>=1.6.1,<2.0.0",
+    "pymysql>=1.1.1,<2.0.0",
+    "python-dotenv>=1.0.1,<2.0.0",
+    "pyyaml>=6.0.2,<7.0.0"
+]
 packages = [{ include = "rgs_interface", from = "src" }]
 
-[tool.poetry.dependencies]
-python = ">=3.12,<4.0"
-sqlalchemy = "2.0.35"
-pandas = "2.2.3"
-numpy = "1.26.4"
-seaborn = "0.13.2"
-matplotlib = "3.8.3"
-scikit-learn = "^1.6.1"
-pymysql = "^1.1.1"
-python-dotenv = "^1.0.1"
-pyyaml = "^6.0.2"
-argparse = "^1.4.0"
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 fetch-rgs = "rgs_interface.cli:main"  # Adds a CLI command
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
