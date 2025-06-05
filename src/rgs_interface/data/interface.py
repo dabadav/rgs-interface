@@ -1,11 +1,14 @@
+# %%
 import pandas as pd
 from sqlalchemy import text, exc
 from typing import Union 
 import importlib.resources
 from rgs_interface import sql 
-from rgs_interface.db import get_db_engine 
-from rgs_interface.data.schemas import PrescriptionStagingRow, RecsysMetricsRow 
+from rgs_interface.db import get_db_engine
+from rgs_interface.data.schemas import PrescriptionStagingRow, RecsysMetricsRow
+import logging
 
+logger = logging.getLogger(__name__)
 
 class DatabaseInterface:
     def __init__(self):
@@ -14,7 +17,7 @@ class DatabaseInterface:
         """
         self.engine = get_db_engine()
         if not self.engine:
-            print("Critical: Database engine could not be obtained during DatabaseInterface initialization.")
+            logger.critical("Database engine could not be obtained during DatabaseInterface initialization.")
 
     ###########################
     ### ---- Get Data ---- ####
@@ -47,7 +50,7 @@ class DatabaseInterface:
         pe = self.fetch_pe_data(patient_ids, rgs_mode)
     
         if dm is None or pe is None:
-            print("Error in fetch_timeseries_data: Failed to retrieve dm or pe data.")
+            logger.error("Failed to retrieve DM or PE data in fetch_timeseries_data().")
             return None 
 
         return dm.merge(
@@ -106,6 +109,15 @@ class DatabaseInterface:
             query="SELECT * FROM patient WHERE PATIENT_USER LIKE :pattern;",
             params={"pattern": f"%{pattern}%"}
         )
+    
+    def fetch_patients_by_study(self, study_ids):
+        """
+        Fetch patient IDs based on which study
+        """
+        return self._fetch(
+            query="SELECT * FROM `clinical_trials` WHERE `STUDY_ID` = :study_id AND `RECOMMEND` = 1;",
+            params={"study_id": tuple(study_ids)}
+        )
 
     def fetch_patients(self):
         return self._fetch(
@@ -125,7 +137,7 @@ class DatabaseInterface:
         :return: DataFrame with query results.
         """
         if not self.engine:
-            print("Query execution failed: Database engine not available.")
+            logger.error("Query execution failed: Database engine not available.")
             return None
 
         try:
@@ -145,10 +157,10 @@ class DatabaseInterface:
 
             if output_file:
                 df.to_csv(output_file, index=False)
-                print(f"Data successfully saved to {output_file}")
+                logger.info("Data successfully saved to %s", output_file)
             return df
         except Exception as e:
-            print(f"Query execution failed: {e}")
+            logger.exception("Query execution failed with exception.")
             return None
 
     ### ---- Write Operations ---- ###
@@ -158,7 +170,7 @@ class DatabaseInterface:
         Adds a new entry to the prescription_staging table and returns the new ID.
         """
         if not isinstance(entry, PrescriptionStagingRow):
-            print("Error: entry must be an instance of PrescriptionStagingRow.")
+            logger.error("Error: entry must be an instance of PrescriptionStagingRow.")
             return None
 
         sql_query = """
@@ -171,7 +183,7 @@ class DatabaseInterface:
         )
         """
         if not self.engine:
-            print("Cannot add prescription staging entry: Database engine not available.")
+            logger.error("Cannot add prescription staging entry: Database engine not available.")
             return None
         
         new_id = None
@@ -185,14 +197,14 @@ class DatabaseInterface:
                     transaction.commit()            
             return new_id
         
-        except (TypeError, ValueError) as ve: 
-            print(f"Data validation error for prescription staging entry: {ve}")
+        except (TypeError, ValueError) as ve:
+            logger.error(f"Data validation error for prescription staging entry: {ve}")
             return None
         except exc.SQLAlchemyError as e:
-            print(f"Failed to add prescription staging entry (SQLAlchemyError): {e}")
+            logger.error(f"Failed to add prescription staging entry (SQLAlchemyError): {e}")
             return None
         except Exception as e:
-            print(f"An unexpected error occurred while adding prescription staging entry: {e}")
+            logger.exception("An unexpected error occurred while adding prescription staging entry.")
             return None
 
     def add_recsys_metric_entry(self, entry: RecsysMetricsRow) -> Union[int, None]:
@@ -200,7 +212,7 @@ class DatabaseInterface:
         Adds a new entry to the recsys_metrics table and returns the new ID.
         """
         if not isinstance(entry, RecsysMetricsRow):
-            print("Error: entry must be an instance of RecsysMetricsRow.")
+            logger.error("Error: entry must be an instance of RecsysMetricsRow.")
             return None
 
         sql_query = """
@@ -211,7 +223,7 @@ class DatabaseInterface:
         )
         """
         if not self.engine:
-            print("Cannot add recsys metric entry: Database engine not available.")
+            logger.error("Cannot add recsys metric entry: Database engine not available.")
             return None
 
         new_id = None
@@ -226,13 +238,13 @@ class DatabaseInterface:
             return new_id
         
         except (TypeError, ValueError) as ve:
-            print(f"Data validation error for recsys metric entry: {ve}")
+            logger.error(f"Data validation error for recsys metric entry: {ve}")
             return None
         except exc.SQLAlchemyError as e:
-            print(f"Failed to add recsys metric entry (SQLAlchemyError): {e}")
+            logger.error(f"Failed to add recsys metric entry (SQLAlchemyError): {e}")
             return None
         except Exception as e:
-            print(f"An unexpected error occurred while adding recsys metric entry: {e}")
+            logger.exception("An unexpected error occurred while adding recsys metric entry.")
             return None
 
     ### ---- Write Handler ---- ####
@@ -245,7 +257,7 @@ class DatabaseInterface:
         :return: Number of rows affected, or None if an error occurs.
         """
         if not self.engine:
-            print("Database write operation failed: Database engine not available.")
+            logger.error("Database write operation failed: Database engine not available.")
             return None
 
         rows_affected = None
@@ -266,16 +278,16 @@ class DatabaseInterface:
                     if result.is_insert or result.is_update or result.is_delete:
                         rows_affected = result.rowcount
                     transaction.commit()
-                print(f"Write operation successful. Rows affected: {rows_affected}") 
+                logger.info(f"Write operation successful. Rows affected: {rows_affected}") 
             return rows_affected
         except FileNotFoundError:
-            print(f"Database write operation failed: SQL file '{query}' not found.")
+            logger.error(f"Database write operation failed: SQL file '{query}' not found.")
             return None
         except exc.SQLAlchemyError as e:
-            print(f"Database write operation failed (SQLAlchemyError) for query '{sql_query_str[:100]}...': {e}")
+            logger.error(f"Database write operation failed (SQLAlchemyError) for query '{sql_query_str[:100]}...': {e}")
             return None
         except Exception as e:
-            print(f"Database write operation failed (General Exception) for query '{sql_query_str[:100]}...': {e}")
+            logger.exception(f"Database write operation failed (General Exception) for query '{sql_query_str[:100]}...': {e}")
             return None
         
     def close(self):
@@ -285,7 +297,7 @@ class DatabaseInterface:
         """
         if self.engine:
             self.engine.dispose()
-            print("Database engine closed")
+            logger.info("Database engine closed")
             self.engine = None
 
     def __enter__(self):

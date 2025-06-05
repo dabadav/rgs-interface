@@ -1,5 +1,8 @@
 from sqlalchemy import create_engine
 from rgs_interface.config import load_config
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_db_engine():
     """Create and return a SQLAlchemy engine for MySQL."""
@@ -18,9 +21,9 @@ def get_db_engine():
         connection_string = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
         engine = create_engine(connection_string, pool_pre_ping=True)
 
-        print("Database engine created successfully")
+        logger.info("Database engine created successfully")
         return engine
 
     except Exception as e:
-        print(f"Database engine creation failed: {e}")
+        logger.exception(f"Database engine creation failed: {e}")
         return None
