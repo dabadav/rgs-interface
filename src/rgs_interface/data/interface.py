@@ -69,6 +69,55 @@ class DatabaseInterface:
             rgs_mode=rgs_mode,
             output_file=output_file
         )
+    
+    def fetch_clinical_data(self, patient_ids, output_file=None):
+        """
+        Fetch clinical data for given patient IDs, from the `clinical_trials` table.
+
+        The expected structure of the `clinical_trials` table is:
+        - PATIENT_ID: Unique identifier for the patient.
+        - STUDY_ID: Identifier for the clinical study.
+        - CLINICAL_SCORES: Clinical scores associated with the patient.
+        - RECOMMEND: Boolean indicating if the patient is recommended for the study.
+
+        The json containing clinical scores is expected to have the following structure:
+        - Support mutliple evaluations per patient as keys.
+        - Each evaluation contains:
+        - evaluation_date: Date of the evaluation.
+        - condition: Condition of the patient at the time of evaluation (e.g., "pre", "post").
+
+        .. code-block:: json
+        [
+            {
+                "evaluation_date": "2023-12-04",
+                "condition": "pre",
+                "MoCA": {
+                    "Visuospatial/Executive": 0,
+                    "Naming": 3,
+                    "Attention": 5,
+                    "Language": 0,
+                    "Abstraction": 0,
+                    "Delayed Recall": 2,
+                    "Orientation": 6
+                },
+                "Fugl-Meyer": {
+                    "FM_A": 8,
+                    "FM_B": 18,
+                    "FM_C": 2,
+                    "FM_D": 7
+                }
+            }
+        ]
+        """
+        sql_query_string = """
+        SELECT *
+        FROM `clinical_trials`
+        WHERE `PATIENT_ID` IN :patient_ids;
+        """
+        return self._fetch(
+            query=sql_query_string,
+            params={"patient_ids": tuple(patient_ids)}
+        )
 
     def fetch_pe_data(self, patient_ids, rgs_mode="plus", output_file=None):
         """

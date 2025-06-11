@@ -109,8 +109,8 @@ class RecsysMetricsRow:
             raise TypeError("metric_date must be a valid date object.")
         if not isinstance(self.metric_key, RecsysMetricKeyEnum):
             raise TypeError("metric_key must be an instance of RecsysMetricKeyEnum.")
-        if not isinstance(self.metric_value, (float, int, str)):
-            raise TypeError("metric_value must be a float, int, or string.")
+        if not isinstance(self.metric_value, (float, int, str, type(None))):
+            raise TypeError("metric_value must be a float, int, str, or None.")
 
     def to_params_dict(self) -> dict:
         data = asdict(self)
@@ -130,5 +130,5 @@ class RecsysMetricsRow:
             recommendation_id=recommendation_id,
             metric_date=metric_date,
             metric_key=RecsysMetricKeyEnum[row["KEY"]],
-            metric_value=row['VALUE']
+            metric_value=None if pd.isna(row["VALUE"]) else row["VALUE"]
         )
