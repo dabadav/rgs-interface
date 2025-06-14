@@ -49,9 +49,9 @@ class DatabaseInterface:
         dm = self.fetch_dm_data(patient_ids, rgs_mode)
         pe = self.fetch_pe_data(patient_ids, rgs_mode)
     
-        if dm is None or pe is None:
+        if dm.empty or pe.empty:
             logger.error("Failed to retrieve DM or PE data in fetch_timeseries_data().")
-            return None 
+            return None
 
         return dm.merge(
             pe,

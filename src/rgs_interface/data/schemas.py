@@ -74,14 +74,14 @@ class PrescriptionStagingRow:
         row: pd.Series,
         recommendation_id: UUID,
         start: date = date.today(),
-        duration: int = 30,
+        duration: int = 300,
         status: PrescriptionStatusEnum = PrescriptionStatusEnum.PENDING
     ) -> 'PrescriptionStagingRow':
         return cls(
             patient_id=int(row["PATIENT_ID"]),
             protocol_id=int(row["PROTOCOL_ID"]),
             starting_date=start,
-            ending_date=start + timedelta(days=duration),
+            ending_date=start + timedelta(days=7),
             weekday=WeekdayEnum(row['WEEKDAY']) if isinstance(row['WEEKDAY'], str) else list(WeekdayEnum)[int(row['WEEKDAY'])],
             session_duration=duration,
             recommendation_id=recommendation_id,
