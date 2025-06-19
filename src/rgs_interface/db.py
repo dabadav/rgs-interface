@@ -21,9 +21,9 @@ def get_db_engine():
         connection_string = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
         engine = create_engine(connection_string, pool_pre_ping=True)
 
-        logger.info("Database engine created successfully")
+        logger.info(f"Database engine created successfully - {db_name}")
         return engine
 
     except Exception as e:
-        logger.exception(f"Database engine creation failed: {e}")
+        logger.critical(f"Database engine creation failed: {e}")
         return None
