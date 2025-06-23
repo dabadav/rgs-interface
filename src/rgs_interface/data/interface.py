@@ -5,7 +5,16 @@ from typing import Union
 
 import pandas as pd
 from rgs_interface import sql
-from rgs_interface.data.schemas import PrescriptionStagingRow, RecsysMetricsRow
+from rgs_interface.data.schemas import (
+    ClinicalTrialsRow,
+    DifficultyModulatorsPlusRow,
+    PatientRow,
+    PerformanceEstimatorsPlusRow,
+    PrescriptionPlusRow,
+    PrescriptionStagingRow,
+    RecsysMetricsRow,
+    SessionPlusRow,
+)
 from rgs_interface.db import get_db_engine
 from sqlalchemy import exc, text
 
