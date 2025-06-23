@@ -75,12 +75,12 @@ SELECT
     END AS ADHERENCE,
 
     -- DM metric: session average
-    dd.DM_VALUE,
+    dd.DM_VALUE
 
     -- Other session outcome metrics
-    CAST(r.TOTAL_SUCCESS AS INT) AS TOTAL_SUCCESS,
-    CAST(r.TOTAL_ERRORS AS INT) AS TOTAL_ERRORS,
-    CAST(r.GAME_SCORE AS INT) AS GAME_SCORE
+    -- CAST(r.TOTAL_SUCCESS AS INT) AS TOTAL_SUCCESS,
+    -- CAST(r.TOTAL_ERRORS AS INT) AS TOTAL_ERRORS,
+    -- CAST(r.GAME_SCORE AS INT) AS GAME_SCORE
 
 
 FROM SessionData sd
