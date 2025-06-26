@@ -25,10 +25,14 @@ class PrescriptionStatusEnum(Enum):
 
 
 class RecsysMetricKeyEnum(Enum):
+    SCORE = "score"
     DELTA_DM = "delta_dm"
-    ADHERENCE_RECENT = "adherence"
+    ADHERENCE_RECENT = "recent_adherence"
     PPF = "ppf"
     CONTRIB = "contrib"
+    USAGE = "total_usage"
+    USAGE_WEEK = "usage_week"
+    SESSION_INDEX = "total_prescribed_sessions"
 
 
 @dataclass
@@ -95,7 +99,7 @@ class PrescriptionStagingRow:
             ),
             session_duration=duration,
             recommendation_id=recommendation_id,
-            weeks_since_start=0,  # Adjust as needed
+            weeks_since_start=row["WEEKS_SINCE_START"],
             status=status,
         )
 
