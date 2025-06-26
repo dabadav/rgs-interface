@@ -80,14 +80,14 @@ def fetch_rgs(
     ),
     rgs_mode: str = typer.Option("app", help="Mode for RGS data (default: 'app')."),
     output_file: Optional[Path] = typer.Option(
-        None, help="Path to save the output file."
+        None, "--output-file", "-o", help="Path to save the output file."
     ),
 ):
     """Load RGS data by patient IDs, hospital IDs, or study ID."""
     db_handler = DatabaseInterface()
     patient_ids = None
     if patients_file:
-        with open(patients_file, "r") as f:
+        with open(patients_file, "r", encoding="utf-8") as f:
             patient_ids = [int(line.strip()) for line in f if line.strip().isdigit()]
     elif patients:
         patient_ids = patients
