@@ -17,7 +17,8 @@ dependencies = [
     "scikit-learn>=1.6.1,<2.0.0",
     "pymysql>=1.1.1,<2.0.0",
     "python-dotenv>=1.0.1,<2.0.0",
-    "pyyaml>=6.0.2,<7.0.0"
+    "pyyaml>=6.0.2,<7.0.0",
+    "typer (>=0.16.0,<0.17.0)"
 ]
 packages = [{ include = "rgs_interface", from = "src" }]
 
@@ -26,4 +27,4 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-fetch-rgs = "rgs_interface.cli:main"  # Adds a CLI command
+rgs-cli = "rgs_interface.cli:app"  # Adds a CLI command
