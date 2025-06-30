@@ -167,67 +167,51 @@ finally:
 
 \</details\>
 
+Here’s a clean, minimal update that reflects your latest CLI changes (using `rgs-cli` and Typer-based subcommands), without cluttering the existing document structure. I’ll leave the Python module section mostly intact and **only replace the outdated CLI section** with the new `rgs-cli` interface.
+
+---
+
 ### 📖 CLI
 
-```cmd
-fetch-rgs --mode patients --patients 204 775 --rgs-mode plus --dms True
+The CLI is now exposed via:
+
+```bash
+rgs-cli <command> [options]
 ```
 
-Run the script using one of the following methods:
+#### Available Commands:
 
-\<details\>
-\<summary\>1. Fetch Data for Specific Patients\</summary\>
-\</br\>
+| Command             | Description                                               |
+| ------------------- | --------------------------------------------------------- |
+| `credentials set`   | Set or overwrite RGS database credentials                 |
+| `credentials check` | Check if RGS credentials are already configured           |
+| `fetch`             | Fetch RGS data for specific patients, hospitals, or study |
+| `list-patients`     | List patient IDs by hospital or study                     |
 
-You can provide patient IDs directly:
+#### Example Usage:
 
-```sh
-fetch-rgs --mode patients --patients 204 775 787 788
+```bash
+# Set up credentials (force overwrite):
+rgs-cli credentials set --force
+
+# Check existing credentials:
+rgs-cli credentials check
+
+# Fetch RGS app data for given patients:
+rgs-cli fetch --patients 204 775 --rgs-mode app --output-file rgs_data.csv
+
+# Fetch RGS data using a text file with patient IDs (one ID per line):
+rgs-cli fetch --patients-file patient_ids.txt --rgs-mode plus
+
+# Fetch patients for a given hospital:
+rgs-cli fetch --hospital 7 8 9
+
+# Fetch patients for a given study:
+rgs-cli fetch --study STUDY_ID_001
+
+# List patient IDs for a study:
+rgs-cli list-patients --study STUDY_ID_001
 ```
-
-Or, provide a text file where each line contains a patient ID:
-
-```sh
-fetch-rgs --mode patients --patients-file patient_ids.txt
-```
-
-\</details\>
-
-\<details\>
-\<summary\>2. Fetch Data for Patients in Hospitals\</summary\>
-\</br\>
-
-Provide hospital IDs to fetch all associated patient IDs:
-
-```sh
-fetch-rgs --mode hospital --hospital 7 8 9 11 12
-```
-
-\</details\>
-
-\<details\>
-\<summary\>3. Set RGS Mode\</summary\>
-\</br\>
-
-You can change the RGS mode (default is `app`) using the `--rgs-mode` flag:
-
-```sh
-fetch-rgs --mode patients --patients 204 775 --rgs-mode plus
-```
-
-\</details\>
-
-\<details\>
-\<summary\>4. Set DMS Timeseries Data\</summary\>
-\</br\>
-
-Default: `False` (DMs data not included).
-
-```sh
-fetch-rgs --mode patients --patients 204 775 --rgs-mode plus --dms True
-```
-
-\</details\>
 
 -----
 
@@ -243,5 +227,3 @@ fetch-rgs --mode patients --patients 204 775 --rgs-mode plus --dms True
       * Added a `try...finally` block with `db_handler.close()` to demonstrate proper resource management. I also added a commented-out example of using a `with` statement if your `DatabaseInterface` class is implemented as a context manager (which it was in our previous discussions).
       * For methods like `fetch_patients_by_hospital` that return DataFrames, I added a comment on how one might extract a list of IDs, as the original example implied a direct list return.
   * **CLI Section**: This section remains unchanged as the command-line tool's usage from a user's perspective would not change, even if its internal implementation now uses the `DatabaseInterface` class.
-
-These changes should minimally update your documentation to accurately reflect the new class-based approach for the Python API.
