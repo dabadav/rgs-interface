@@ -27,4 +27,4 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-fetch-rgs = "rgs_interface.cli:main"  # Adds a CLI command
+rgs-cli = "rgs_interface.cli:app"  # Adds a CLI command

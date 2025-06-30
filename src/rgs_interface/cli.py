@@ -69,7 +69,7 @@ def check_credentials():
 
 
 @app.command()
-def fetch_rgs(
+def fetch(
     patients: Optional[List[int]] = typer.Option(None, help="List of patient IDs."),
     patients_file: Optional[Path] = typer.Option(
         None, help="Path to a text file containing patient IDs (one per line)."
