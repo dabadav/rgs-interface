@@ -129,7 +129,9 @@ class DatabaseInterface:
         ]
         """
         sql_query_string = """
-        SELECT *
+        SELECT *,
+            START_DATE AS CLINICAL_TRIAL_START_DATE,
+            END_DATE AS CLINICAL_TRIAL_END_DATE
         FROM `clinical_trials`
         WHERE `PATIENT_ID` IN :patient_ids;
         """
