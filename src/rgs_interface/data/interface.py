@@ -166,7 +166,14 @@ class DatabaseInterface:
         Fetch patient IDs based on which study
         """
         return self._fetch(
-            query="SELECT * FROM `clinical_trials` WHERE `STUDY_ID` = :study_id AND `RECOMMEND` = 1;",
+            query="""
+            SELECT * 
+            FROM `clinical_trials` 
+            WHERE `STUDY_ID` = :study_id 
+              AND `RECOMMEND` = 1
+              AND CURDATE() <= END_DATE
+              AND DATEDIFF(CURDATE(), START_DATE) % 7 = 0;
+            """,
             params={"study_id": tuple(study_ids)}
         )
 
