@@ -1,6 +1,6 @@
 [project]
 name = "rgs-interface"
-version = "0.4.0"
+version = "0.4.1"
 description = "Fetch data from Eodyne production database"
 authors = [
     {name = "Eodyne Systems SL"}
