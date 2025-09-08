@@ -5,7 +5,7 @@ This package provides a Python and command-line interface to fetch Rehabilitatio
 ### Installation
 
 ```sh
-pip install rgs_interface-0.2.0.tar.gz
+pip install rgs_interface-0.4.1.tar.gz
 ```
 
 ### 📖 Python Module Usage
