@@ -1,7 +1,7 @@
 import logging
 
 from rgs_interface.config import load_config
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, URL
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +20,12 @@ def get_db_engine():
             raise ValueError("Missing database credentials in environment variables")
 
         # Create the database connection string
-        connection_string = (
-            f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
+        connection_string = URL.create(
+            "mysql+pymysql",
+            username=db_user,
+            password=db_password,
+            host=db_host,
+            database=db_name,
         )
         engine = create_engine(connection_string, pool_pre_ping=True)
 
