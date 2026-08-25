@@ -18,15 +18,16 @@ FLUSH PRIVILEGES;
 ## 2. Install
 
 ```sh
-mkdir -p /opt/rgs-api && cd /opt/rgs-api && uv venv --python 3.12 .venv && uv pip install "rgs-interface[server] @ git+https://github.com/dabadav/rgs-interface@v1.0.0" && .venv/bin/rgs-cli server init
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo sh
 ```
 
-`server init` asks for the MySQL password, generates one token per client, and writes
-`/opt/rgs-api/.env` (mode 600). It prints the tokens once; hand each to its client.
-Flags: `--db-user`, `--db-name`, `--port`, `--root-path /rgs-api` (if nginx serves the API
-under a path), `--force` to overwrite.
+What it does, in order: installs `uv` if missing, creates the `rgsapi` system user, installs
+`rgs-interface[server]` into `/opt/rgs-api/.venv`, asks for the MySQL password and writes
+`/opt/rgs-api/.env` (mode 600) with one fresh token per client, installs and starts the
+`rgs-api` systemd service, and checks `/v1/health`. It prints the tokens once; hand each to
+its client.
 
-The resulting file:
+The resulting `.env`:
 
 ```
 PORT=8000
@@ -37,6 +38,10 @@ DB_NAME=global_prod
 API_TOKENS=<token1>:supervisor:r,<token2>:alert:r,<token3>:aicdss:rw
 API_VALIDATE=1
 ```
+
+Variables: `RGS_REF` (version tag, default `v1.0.0`), `RGS_DIR` (`/opt/rgs-api`),
+`RGS_USER` (`rgsapi`). If nginx will serve the API under a path, add `ROOT_PATH=/rgs-api`
+to `.env` and `systemctl restart rgs-api`.
 
 ## 3. Tokens
 
@@ -56,16 +61,8 @@ The tokens live only in `.env` on this server and in each client's secret store.
 
 ## 4. Service
 
-Run the API as its own system user so only it can read `.env`. Print the unit for this
-directory and install it (`--user` if your convention differs):
-
-```sh
-sudo useradd -r -s /usr/sbin/nologin rgsapi
-sudo chown -R rgsapi /opt/rgs-api
-.venv/bin/rgs-cli server init --unit | sudo tee /etc/systemd/system/rgs-api.service
-```
-
-It looks like this:
+The installer wrote `/etc/systemd/system/rgs-api.service`, running as `rgsapi` (only that
+user can read `.env`):
 
 ```ini
 [Unit]
@@ -86,7 +83,7 @@ WantedBy=multi-user.target
 ```
 
 ```sh
-sudo systemctl enable --now rgs-api
+systemctl status rgs-api
 curl -H "Authorization: Bearer <token1>" http://127.0.0.1:8000/v1/health
 ```
 
@@ -121,13 +118,13 @@ location /rgs-api/ {
 
 ## Update
 
+Same one-liner with the new tag; `.env` is kept.
+
 ```sh
-cd /opt/rgs-api
-uv pip install "rgs-interface[server] @ git+https://github.com/dabadav/rgs-interface@v1.1.0"
-sudo systemctl restart rgs-api
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.1.0/deploy/install.sh | sudo RGS_REF=v1.1.0 sh
 ```
 
-Rollback: same command with the previous tag.
+Rollback: same with the previous tag.
 
 ## Operate
 
