@@ -20,9 +20,15 @@ FLUSH PRIVILEGES;
 mkdir -p /opt/rgs-api && cd /opt/rgs-api
 uv venv --python 3.12 .venv
 uv pip install "rgs-interface[server] @ git+https://github.com/dabadav/rgs-interface@v1.0.0"
+.venv/bin/rgs-cli server init
 ```
 
-Create `/opt/rgs-api/.env` (`chmod 600`):
+`server init` asks for the MySQL password, generates one token per client, and writes
+`/opt/rgs-api/.env` (mode 600). It prints the tokens once; hand each to its client.
+Flags: `--db-user`, `--db-name`, `--port`, `--root-path /rgs-api` (if nginx serves the API
+under a path), `--force` to overwrite.
+
+The resulting file:
 
 ```
 PORT=8000
@@ -31,7 +37,7 @@ DB_USER=api_user
 DB_PASS=<password>
 DB_NAME=global_prod
 API_TOKENS=<token1>:supervisor:r,<token2>:alert:r,<token3>:aicdss:rw
-# ROOT_PATH=/rgs-api      only if nginx serves the API under a path
+API_VALIDATE=1
 ```
 
 ## 3. Tokens
@@ -42,7 +48,7 @@ only if the token is in `API_TOKENS`.
 
 `API_TOKENS` is a comma-separated list of `token:name:scope`:
 
-- `token`: any random string. Generate one per client with `openssl rand -hex 24`.
+- `token`: a random string. `server init` generates them; by hand, `openssl rand -hex 24`.
 - `name`: a label for the log lines (`supervisor`, `alert`, `aicdss`). Not checked, just printed.
 - `scope`: `r` = read only (GET), `rw` = may also write (POST). Only ai-cdss writes.
 
@@ -52,8 +58,14 @@ The tokens live only in `.env` on this server and in each client's secret store.
 
 ## 4. Service
 
-`/etc/systemd/system/rgs-api.service` (set `User=` to the account that owns `/opt/rgs-api`,
-same as your other services):
+Print the unit for this directory and install it (`--user` = the account that owns
+`/opt/rgs-api`, same as your other services; default `www-data`):
+
+```sh
+.venv/bin/rgs-cli server init --unit --user www-data | sudo tee /etc/systemd/system/rgs-api.service
+```
+
+It looks like this:
 
 ```ini
 [Unit]

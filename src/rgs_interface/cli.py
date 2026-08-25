@@ -17,6 +17,8 @@ from rgs_interface.registry import QUERIES
 app = typer.Typer(help="RGS Data CLI", no_args_is_help=True)
 credentials_app = typer.Typer(help="Manage RGS credentials.")
 app.add_typer(credentials_app, name="credentials")
+server_app = typer.Typer(help="Set up the RGS DB API on the database host.")
+app.add_typer(server_app, name="server")
 
 
 def _backend(direct: bool):
@@ -114,6 +116,75 @@ def list_patients(
     )
     ids = sorted(int(x) for x in df["PATIENT_ID"].dropna().unique())
     typer.echo(f"{len(ids)} patients: {ids}")
+
+
+UNIT_TEMPLATE = """\
+[Unit]
+Description=RGS DB API
+After=network.target mysql.service
+
+[Service]
+User={user}
+WorkingDirectory={dir}
+EnvironmentFile={dir}/.env
+ExecStart={dir}/.venv/bin/uvicorn rgs_interface.server:app --host 127.0.0.1 --port ${{PORT}}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+CONSUMERS = (("supervisor", "r"), ("alert", "r"), ("aicdss", "rw"))
+
+
+@server_app.command("init")
+def server_init(
+    db_host: str = typer.Option("127.0.0.1", help="MySQL host"),
+    db_user: str = typer.Option("api_user", help="MySQL user"),
+    db_name: str = typer.Option("global_prod", help="MySQL database"),
+    port: int = typer.Option(8000, help="Local port uvicorn listens on"),
+    root_path: Optional[str] = typer.Option(None, help="URL prefix if nginx serves the API under a path, e.g. /rgs-api"),
+    unit: bool = typer.Option(False, "--unit", help="Print a systemd unit for this directory instead of writing .env"),
+    user: str = typer.Option("www-data", help="System user for the unit (with --unit)"),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing .env"),
+):
+    """Write .env with fresh tokens in the current directory, or print a systemd unit."""
+    import os
+    import secrets
+
+    here = Path.cwd()
+    if unit:
+        typer.echo(UNIT_TEMPLATE.format(dir=here, user=user), nl=False)
+        return
+
+    env_path = here / ".env"
+    if env_path.exists() and not force:
+        typer.echo(f"{env_path} exists; use --force to overwrite.", err=True)
+        raise typer.Exit(1)
+
+    from rgs_interface.config import prompt_non_empty
+
+    db_pass = prompt_non_empty(f"MySQL password for {db_user}@{db_host}: ", is_password=True)
+    tokens = [(name, scope, secrets.token_hex(24)) for name, scope in CONSUMERS]
+
+    lines = [
+        f"PORT={port}",
+        f"DB_HOST={db_host}",
+        f"DB_USER={db_user}",
+        f"DB_PASS={db_pass}",
+        f"DB_NAME={db_name}",
+        "API_TOKENS=" + ",".join(f"{tok}:{name}:{scope}" for name, scope, tok in tokens),
+        "API_VALIDATE=1",
+    ]
+    lines.append(f"ROOT_PATH={root_path}" if root_path else "# ROOT_PATH=/rgs-api   only if nginx serves the API under a path")
+    env_path.write_text("\n".join(lines) + "\n")
+    os.chmod(env_path, 0o600)
+
+    typer.echo(f"Wrote {env_path} (600)\n")
+    typer.echo("Tokens (give each to its client, then close this terminal):")
+    for name, scope, tok in tokens:
+        typer.echo(f"  {name:<11} ({scope:<2})  {tok}")
 
 
 if __name__ == "__main__":
