@@ -1,0 +1,11 @@
+# docker compose up -d      (on the DB host; .env holds DB_* and API_TOKENS)
+services:
+  api:
+    build: .
+    image: rgs-db-api:1
+    network_mode: host          # reach MySQL on 127.0.0.1:3306; API listens on :8000
+    env_file: .env
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }

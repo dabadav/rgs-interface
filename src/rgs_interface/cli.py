@@ -1,153 +1,121 @@
+"""rgs-cli — credentials, ad-hoc fetches, patient lookups.
+
+Talks to the RGS DB API by default (``RGS_API_URL`` / ``RGS_API_TOKEN`` from env or
+``~/.rgs_config.yaml``). ``--direct`` uses a direct MySQL connection instead (only works
+where port 3306 is reachable).
+"""
+
+from __future__ import annotations
+
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
-import pandas as pd
 import typer
-from rgs_interface.data.interface import DatabaseInterface
 
-app = typer.Typer(help="RGS Data CLI")
+from rgs_interface.registry import QUERIES
 
+app = typer.Typer(help="RGS Data CLI", no_args_is_help=True)
 credentials_app = typer.Typer(help="Manage RGS credentials.")
 app.add_typer(credentials_app, name="credentials")
 
 
-def _save_rgs_data(patient_ids: List[int], rgs_mode: str, output_file: Optional[Path]):
-    db_handler = DatabaseInterface()
-    out_file = output_file or Path(f"rgs_{rgs_mode}.csv")
-    db_handler.fetch_rgs_data(patient_ids, rgs_mode=rgs_mode, output_file=out_file)
-    typer.echo(f"Data saved to {out_file}")
+def _backend(direct: bool):
+    if direct:
+        from rgs_interface.db import get_db_engine
+        from rgs_interface.sql import SqlBackend
+
+        return SqlBackend(get_db_engine(), read_only=True)
+    from rgs_interface.config import get_api_config
+    from rgs_interface.http import HttpBackend
+
+    cfg = get_api_config()
+    if not cfg:
+        typer.echo("No API credentials. Run: rgs-cli credentials set", err=True)
+        raise typer.Exit(1)
+    return HttpBackend(cfg["RGS_API_URL"], cfg["RGS_API_TOKEN"])
+
+
+def _parse_params(items: list[str]) -> dict:
+    """``key=value`` pairs; comma-separated values become lists."""
+    out: dict = {}
+    for item in items:
+        if "=" not in item:
+            raise typer.BadParameter(f"expected key=value, got {item!r}")
+        k, v = item.split("=", 1)
+        out[k] = v.split(",") if "," in v else v
+    return out
 
 
 @credentials_app.command("set")
 def set_credentials(
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Overwrite existing credentials without prompting."
-    )
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite without prompting."),
 ):
-    """
-    Setup or overwrite credentials for RGS data access.
-    """
-    from rgs_interface.config import get_config, prompt_non_empty, save_to_yaml
+    """Store API url/token (and optionally direct DB credentials) in ~/.rgs_config.yaml."""
+    from rgs_interface.config import get_api_config, prompt_non_empty, save_yaml
 
-    existing = get_config()
-    if existing and not force:
-        typer.echo("Credentials already exist.")
-        if not typer.confirm("Do you want to overwrite them?"):
-            typer.echo("Aborted.")
-            raise typer.Exit()
-
-    db_user = prompt_non_empty("Enter DB User: ")
-    while True:
-        db_pass = prompt_non_empty("Enter DB Password: ", is_password=True)
-        db_pass_confirm = prompt_non_empty("Confirm DB Password: ", is_password=True)
-        if db_pass == db_pass_confirm:
-            break
-        typer.echo("Passwords do not match. Please try again.")
-    db_host = prompt_non_empty("Enter DB Host (e.g., localhost): ")
-    db_name = prompt_non_empty("Enter DB Name: ")
-
-    save_to_yaml(db_user, db_pass, db_host, db_name)
-    typer.echo("Credentials saved successfully.")
+    if get_api_config() and not force and not typer.confirm("Credentials exist. Overwrite?"):
+        raise typer.Exit()
+    url = prompt_non_empty("API URL (e.g. https://api.rgs.example): ")
+    token = prompt_non_empty("API token: ", is_password=True)
+    values = {"RGS_API_URL": url, "RGS_API_TOKEN": token}
+    if typer.confirm("Also store direct DB credentials (for --direct)?", default=False):
+        values.update(
+            DB_USER=prompt_non_empty("DB User: "),
+            DB_PASS=prompt_non_empty("DB Password: ", is_password=True),
+            DB_HOST=prompt_non_empty("DB Host: "),
+            DB_NAME=prompt_non_empty("DB Name: "),
+        )
+    save_yaml(**values)
+    typer.echo("Credentials saved.")
 
 
 @credentials_app.command("check")
 def check_credentials():
-    """
-    Check if credentials are set and display their source.
-    """
-    from rgs_interface.config import CONFIG_FILE, ENV_FILE, get_config
+    """Show which credentials are configured and where they come from."""
+    from rgs_interface.config import CONFIG_FILE, ENV_FILE, get_api_config, get_config
 
-    config = get_config()
-    if config:
-        typer.echo("Credentials are set.")
-        if ENV_FILE.exists():
-            typer.echo(f"Loaded from: {ENV_FILE}")
-        elif CONFIG_FILE.exists():
-            typer.echo(f"Loaded from: {CONFIG_FILE}")
-    else:
-        typer.echo("No credentials found.")
+    api, db = get_api_config(), get_config()
+    typer.echo(f"API : {'set (' + api['RGS_API_URL'] + ')' if api else 'not set'}")
+    typer.echo(f"DB  : {'set (' + db['DB_HOST'] + ')' if db else 'not set'}")
+    typer.echo(f"Sources: {ENV_FILE} {'✓' if ENV_FILE.exists() else '✗'}, {CONFIG_FILE} {'✓' if CONFIG_FILE.exists() else '✗'}")
 
 
 @app.command()
 def fetch(
-    patients: Optional[List[int]] = typer.Option(None, help="List of patient IDs."),
-    patients_file: Optional[Path] = typer.Option(
-        None, help="Path to a text file containing patient IDs (one per line)."
-    ),
-    hospital: Optional[List[int]] = typer.Option(None, help="List of hospital IDs."),
-    study: Optional[str] = typer.Option(
-        None, help="Study ID to fetch all patients for a study."
-    ),
-    rgs_mode: str = typer.Option("app", help="Mode for RGS data (default: 'app')."),
-    output_file: Optional[Path] = typer.Option(
-        None, "--output-file", "-o", help="Path to save the output file."
-    ),
+    name: str = typer.Argument(..., help=f"Query name: {', '.join(QUERIES)}"),
+    param: list[str] = typer.Option([], "--param", "-p", help="key=value; comma-separates lists"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="CSV/parquet path (by extension)"),
+    direct: bool = typer.Option(False, "--direct", help="Use direct MySQL instead of the API"),
 ):
-    """Load RGS data by patient IDs, hospital IDs, or study ID."""
-    db_handler = DatabaseInterface()
-    patient_ids = None
-    if patients_file:
-        with open(patients_file, "r", encoding="utf-8") as f:
-            patient_ids = [int(line.strip()) for line in f if line.strip().isdigit()]
-    elif patients:
-        patient_ids = patients
-    elif hospital:
-        patient_ids = db_handler.fetch_patients_by_hospital(hospital)
-    elif study:
-        patient_ids = db_handler.fetch_patients_by_study(study)
+    """Run a registry query and print or save the result."""
+    if name not in QUERIES:
+        raise typer.BadParameter(f"unknown query {name!r}; choose from {', '.join(QUERIES)}")
+    df = _backend(direct).fetch(name, **_parse_params(param))
+    if output is None:
+        typer.echo(df.to_string(max_rows=50))
+        typer.echo(f"[{len(df)} rows]")
+    elif output.suffix == ".parquet":
+        df.to_parquet(output, index=False)
+        typer.echo(f"Saved {len(df)} rows to {output}")
     else:
-        typer.echo(
-            "[ERROR] Provide one of --patients, --patients-file, --hospital, or --study."
-        )
-        raise typer.Exit(code=1)
-    unique_patient_ids = normalize_patient_ids(patient_ids)
-    if not unique_patient_ids:
-        typer.echo("[ERROR] No patient IDs found after deduplication.")
-        raise typer.Exit(code=1)
-    _save_rgs_data(unique_patient_ids, rgs_mode, output_file)
+        df.to_csv(output, index=False)
+        typer.echo(f"Saved {len(df)} rows to {output}")
 
 
-def normalize_patient_ids(patient_ids) -> list[int]:
-    """Convert patient_ids (DataFrame, Series, list, or None) to a unique sorted list of ints."""
-    if patient_ids is None:
-        return []
-    if isinstance(patient_ids, pd.DataFrame):
-        if len(patient_ids.columns) > 0:
-            patient_ids = patient_ids["PATIENT_ID"].tolist()
-        else:
-            return []
-    elif hasattr(patient_ids, "tolist"):
-        patient_ids = patient_ids.tolist()
-    elif not isinstance(patient_ids, list):
-        return []
-    # Remove None and deduplicate
-    return sorted({int(pid) for pid in patient_ids if pid is not None})
-
-
-@app.command()
+@app.command("list-patients")
 def list_patients(
-    hospital: Optional[List[int]] = typer.Option(None, help="List of hospital IDs."),
-    study: Optional[str] = typer.Option(None, help="Study ID to list patients for."),
+    hospital: list[int] = typer.Option([], "--hospital", help="Hospital IDs"),
+    name: Optional[str] = typer.Option(None, "--name", help="PATIENT_USER LIKE pattern, e.g. 'AI%'"),
+    direct: bool = typer.Option(False, "--direct"),
 ):
-    """List patient IDs by hospital or study."""
-    db_handler = DatabaseInterface()
-    if hospital:
-        patient_ids = db_handler.fetch_patients_by_hospital(hospital)
-        unique_patient_ids = normalize_patient_ids(patient_ids)
-        if not unique_patient_ids:
-            typer.echo("[ERROR] No patient IDs found for the given hospital(s).")
-            raise typer.Exit(code=1)
-        typer.echo(f"Patients in hospital(s) {hospital}: {unique_patient_ids}")
-    elif study:
-        patient_ids = db_handler.fetch_patients_by_study(study)
-        unique_patient_ids = normalize_patient_ids(patient_ids)
-        if not unique_patient_ids:
-            typer.echo("[ERROR] No patient IDs found for the given study.")
-            raise typer.Exit(code=1)
-        typer.echo(f"Patients in study {study}: {unique_patient_ids}")
-    else:
-        typer.echo("[ERROR] Provide --hospital or --study to list patients.")
-        raise typer.Exit(code=1)
+    """List patient IDs by hospital and/or name pattern."""
+    if not hospital and not name:
+        raise typer.BadParameter("provide --hospital and/or --name")
+    df = _backend(direct).fetch(
+        "patients", hospital_ids=hospital or None, name_like=name
+    )
+    ids = sorted(int(x) for x in df["PATIENT_ID"].dropna().unique())
+    typer.echo(f"{len(ids)} patients: {ids}")
 
 
 if __name__ == "__main__":

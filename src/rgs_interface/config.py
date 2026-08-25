@@ -96,3 +96,36 @@ if __name__ == "__main__":
     DB_PASS = credentials["DB_PASS"]
     DB_HOST = credentials["DB_HOST"]
     DB_NAME = credentials["DB_NAME"]
+
+# ---------------------------------------------------------------------------
+# API client configuration (rgs-cli / HttpBackend)
+# ---------------------------------------------------------------------------
+
+API_KEYS = ("RGS_API_URL", "RGS_API_TOKEN")
+
+
+def get_api_config():
+    """API url + token from env (.env honoured) or ~/.rgs_config.yaml; None if incomplete."""
+    load_dotenv(ENV_FILE)
+    cfg = {k: os.getenv(k) for k in API_KEYS}
+    if all(cfg.values()):
+        return cfg
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE) as f:
+            data = yaml.safe_load(f) or {}
+        cfg = {k: data.get(k) for k in API_KEYS}
+        if all(cfg.values()):
+            return cfg
+    return None
+
+
+def save_yaml(**values):
+    """Merge key/values into ~/.rgs_config.yaml (keeps existing keys)."""
+    data = {}
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE) as f:
+            data = yaml.safe_load(f) or {}
+    data.update({k: v for k, v in values.items() if v is not None})
+    with open(CONFIG_FILE, "w") as f:
+        yaml.dump(data, f)
+    CONFIG_FILE.chmod(0o600)
