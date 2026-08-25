@@ -1,6 +1,11 @@
 # rgs_interface v1 — minimal DB contract + API
 
-Status: **plan** (branch `feat/api-contract`, 2026-08-25). Nothing below is implemented yet.
+Status: **agreed 2026-08-25**, implementation in progress on branch `feat/api-contract`.
+
+Decisions: one repo, apps as extras (`[server]`, `[cli]`); row models validate every
+response, failure → 500; no `DatabaseInterface` shim (ai-cdss stays on v0.4.1 until its PR);
+`fetch("name", **params)` string keys; writes in v1 with scoped tokens; cohort columns use the
+alert's names; `preprocess.py` and dead SQL deleted; patient lookups kept as `GET /v1/patients`.
 
 ## Why
 
@@ -17,14 +22,16 @@ Endpoint list and SQL: [`API_ENDPOINTS.md`](API_ENDPOINTS.md).
 
 Three ideas, nothing else:
 
-1. **Registry** — `name → (param model, row model)`; SQL lives in `queries/<name>.sql`.
-   The row model is the contract: field names are the columns, field types are validated
-   on every server response.
-2. **Two backends with one method** — `SqlBackend.fetch(name, **params)` runs the SQL;
-   `HttpBackend.fetch(name, **params)` calls `GET /v1/<name>`; both return a DataFrame.
-3. **Server is a loop** — for each registry entry, mount `GET /v1/<name>`, validate params
-   with the param model, run `SqlBackend.fetch`, **validate rows with the row model**,
-   return parquet (Python clients) or JSON (JS clients) by `Accept` header.
+1. **Registry** — reads: `name → Query(param model, row model)`, SQL in `queries/<name>.sql`;
+   writes: `name → Write(body model)`, SQL in `writes/<name>.sql`. The row/body model is
+   the contract: field names are the columns, field types are validated on every response
+   (reads) or request (writes).
+2. **Two backends, two methods** — `fetch(name, **params) -> DataFrame` and
+   `write(name, body) -> int`. `SqlBackend` runs SQL; `HttpBackend` calls
+   `GET|POST /v1/<name>`.
+3. **Server is a loop** — for each read entry mount `GET`, for each write entry mount
+   `POST`; validate params/body, run the backend, validate rows, return parquet or JSON by
+   `Accept`. Bearer tokens carry a scope (`r` / `rw`); `POST` needs `rw`.
 
 Parity is structural: server and client import the same registry from the same package
 version. Validation happens once, at the source; clients trust the server.
@@ -34,32 +41,29 @@ version. Validation happens once, at the source; clients trust the server.
 ```
 src/rgs_interface/
 ├── __init__.py        from .sql import SqlBackend ; from .http import HttpBackend
-├── models.py          12 pydantic row models (the contract)                     ~150 lines
-├── registry.py        Query dataclass, 11 param models, QUERIES dict           ~130
-├── queries/
-│   ├── cohort.sql  protocols.sql  staging.sql  staging_latest.sql
-│   ├── prescriptions.sql  adherence.sql  sessions.sql  recsys_metrics.sql
-│   ├── clinical_trials.sql
-│   ├── rgs_data.sql   (was sql/query.sql)
-│   ├── dm_data.sql    (was sql/query_dm.sql)
-│   └── pe_data.sql    (was sql/query_pe.sql)
-├── sql.py             SqlBackend: fetch + add_prescription_staging_entry + add_recsys_metric_entry   ~90
-├── http.py            HttpBackend: fetch                                                             ~40
-├── server.py          FastAPI app, validates rows before responding (extra: [server])                ~90
+├── models.py          13 pydantic row models (the read contract)
+├── schemas.py         PrescriptionStagingRow, RecsysMetricsRow as pydantic (the write contract) + enums
+├── registry.py        Query / Write dataclasses, param models, QUERIES + WRITES dicts
+├── queries/           13 read .sql  (rgs_data/dm_data/pe_data were sql/query*.sql) + _unused/
+├── writes/            staging.sql, recsys_metrics.sql
+├── sql.py             SqlBackend: fetch, write
+├── http.py            HttpBackend: fetch, write
+├── server.py          FastAPI app; GET per Query, POST per Write; scopes; validation   (extra: [server])
 ├── db.py              engine factory                          (existing, unchanged)
-├── config.py          credentials                             (existing, unchanged)
-├── schemas.py         PrescriptionStagingRow, RecsysMetricsRow (existing, moved up from data/)
-└── cli.py             set-credentials, check-credentials, fetch <name>   (existing, shrunk)
+├── config.py          credentials + API url/token             (existing, extended)
+└── cli.py             credentials set/check, fetch <name>, list-patients; HttpBackend by default, --direct for SQL  (extra: [cli])
 
-Dockerfile             python:3.12-slim, pip install ".[sql,server]", uvicorn rgs_interface.server:app
+Dockerfile             python:3.12-slim, pip install ".[server]", uvicorn rgs_interface.server:app
 docker-compose.yml     network_mode: host, env_file .env
 tests/
 ├── conftest.py        MariaDB via testcontainers, schema + 5-patient seed, FastAPI TestClient
-└── test_contract.py   for name in QUERIES: sql == http, every row validates against q.row
+├── test_contract.py   for name in QUERIES: sql == http, every row validates against q.row
+└── test_writes.py     POST with rw token inserts and returns id; r token → 403
 ```
 
 Deleted: `data/interface.py`, `data/preprocess.py`, `data/__init__.py`, `sql/query_old.sql`,
-`sql/query__.sql`, `sql/query_all.sql`, `sql/query_emotional.sql`, `sql/query_patient.sql`.
+`sql/query__.sql`, `sql/query_all.sql`. Parked unregistered: `queries/_unused/query_emotional.sql`,
+`queries/_unused/query_patient.sql`.
 
 ## Dependencies
 
@@ -72,7 +76,7 @@ dependencies = ["pandas[parquet]>=2.2,<3", "pydantic>=2.7,<3", "pyyaml", "python
 sql    = ["sqlalchemy>=2.0,<3", "pymysql>=1.1,<2"]
 http   = ["requests>=2.32,<3"]
 server = ["rgs-interface[sql]", "fastapi>=0.115", "uvicorn[standard]>=0.30"]
-cli    = ["typer>=0.12"]
+cli    = ["rgs-interface[http]", "typer>=0.12"]
 ```
 
 | project | installs | uses |
@@ -80,7 +84,8 @@ cli    = ["typer>=0.12"]
 | API server (DB host) | `rgs-interface[server]` | `uvicorn rgs_interface.server:app` |
 | cdss-supervisor | `rgs-interface[http]` | `HttpBackend(url, token)` |
 | ai-cdss prod (today) | `rgs-interface@v0.4.1` — frozen | unchanged |
-| ai-cdss when it upgrades | `rgs-interface[sql]` (still writes) | `SqlBackend(engine)`; 3 fetch calls + 2 writes renamed |
+| ai-cdss when it upgrades | `rgs-interface[http]` | `HttpBackend(url, rw_token)`; 3 fetch + 2 write calls renamed; no 3306 needed |
+| rgs-cli | `rgs-interface[cli]` | `HttpBackend` from `~/.rgs_config.yaml`; `--direct` → `SqlBackend` |
 | cdss-alert (JS) | nothing | `fetch()` with `Accept: application/json` |
 
 ## Code
@@ -455,5 +460,5 @@ no mocks.
 | keep `rgs_mode=app` tables? | yes |
 | cohort column names: snake_case (alert) is canonical; supervisor renames on ingest | yes |
 | `ClinicalTrialRow` / `PeRow` exact fields | `extra="allow"` until `DESCRIBE` / first run on new host, then lock to `forbid` |
-| writes over HTTP | not in v1; `HttpBackend` has no write methods |
-| auth | `Authorization: Bearer`, one token per consumer, `API_TOKENS` env |
+| writes over HTTP | in v1: `POST /v1/staging`, `POST /v1/recsys_metrics`; `rw` scope only |
+| auth | `Authorization: Bearer`; `API_TOKENS="tok:consumer:r,tok2:ai-cdss:rw"` |

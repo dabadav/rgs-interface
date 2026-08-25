@@ -2,13 +2,15 @@
 
 Compiled 2026-08-25 from every SQL statement issued by `cdss-supervisor@develop`
 (dashboard, replay, backtest), `cdss-alert`, `ai-cdss` and `rgs_interface` itself.
-31 distinct statements collapse into the 13 registry entries (12 routes + health) below. Each entry is one
+31 distinct statements collapse into the 13 read routes + 2 write routes below (+ health). Each entry is one
 registry item in `rgs_interface.registry` and one route in `rgs_interface.server`.
 
 Conventions
 
-- Every route is `GET /v1/<registry name>` with query params — no path params.
-- Bearer auth. `Accept: application/vnd.apache.parquet` → parquet (Python clients);
+- Reads are `GET /v1/<registry name>` with query params — no path params. Writes are
+  `POST /v1/<name>` with a JSON body validated by the same model that validates reads.
+- Bearer auth with scopes: `r` (supervisor, alert, cli) or `rw` (ai-cdss). `POST` on an `r`
+  token → 403. `Accept: application/vnd.apache.parquet` → parquet (Python clients);
   otherwise JSON `{"rows": [...], "count": n}`. Errors: FastAPI default `{"detail": ...}`
   with 401/422/500.
 - Column names are **verbatim** from today's SQL so client edits are mechanical. Each
@@ -377,21 +379,86 @@ Replaces: `rgs_interface.fetch_rgs_data`, `fetch_dm_data`, `fetch_pe_data`,
 
 ---
 
+## 12. `GET /v1/patients`
+
+`patient` table lookups — used by `rgs-cli list-patients` and kept for ad-hoc use.
+
+| param | type | effect |
+|---|---|---|
+| `patient_ids` | int[] | `PATIENT_ID IN :patient_ids` |
+| `hospital_ids` | int[] | `HOSPITAL_ID IN :hospital_ids` |
+| `name_like` | str | `PATIENT_USER LIKE :name_like` (caller supplies `%`) |
+
+Columns: `PATIENT_ID`, `PATIENT_USER`, `HOSPITAL_ID` (+ others after `DESCRIBE patient`;
+model starts `extra="allow"`).
+
+```sql
+SELECT *
+FROM patient
+WHERE (:patient_ids  IS NULL OR PATIENT_ID  IN :patient_ids)
+  AND (:hospital_ids IS NULL OR HOSPITAL_ID IN :hospital_ids)
+  AND (:name_like    IS NULL OR PATIENT_USER LIKE :name_like)
+ORDER BY PATIENT_ID;
+```
+
+Replaces: `rgs_interface.fetch_patients`, `fetch_patients_by_hospital`, `fetch_patients_by_name`.
+Consumers: cli.
+
+---
+
+## Writes
+
+### `POST /v1/staging`
+
+Body = one `PrescriptionStagingRow` (pydantic, in `rgs_interface.schemas`): `patient_id`,
+`protocol_id`, `starting_date`, `ending_date`, `weekday` (enum), `session_duration`,
+`recommendation_id` (UUID), `weeks_since_start`, `status` (enum). Response
+`{"id": <PRESCRIPTION_STAGING_ID>}`.
+
+```sql
+INSERT INTO prescription_staging (
+    PRESCRIPTION_STAGING_ID, PATIENT_ID, PROTOCOL_ID, STARTING_DATE, ENDING_DATE, WEEKDAY,
+    SESSION_DURATION, RECOMMENDATION_ID, WEEKS_SINCE_START, STATUS
+) VALUES (
+    NULL, :patient_id, :protocol_id, :starting_date, :ending_date, :weekday,
+    :session_duration, :recommendation_id, :weeks_since_start, :status
+);
+```
+
+Replaces: `add_prescription_staging_entry`. Consumer: ai-cdss (scope `rw`).
+
+### `POST /v1/recsys_metrics`
+
+Body = one `RecsysMetricsRow`: `patient_id`, `protocol_id`, `recommendation_id` (UUID),
+`metric_date`, `metric_key` (enum), `metric_value` (float | int | str | null). Response
+`{"id": <RECSYS_METRICS_ID>}`.
+
+```sql
+INSERT INTO recsys_metrics (
+    RECSYS_METRICS_ID, PATIENT_ID, PROTOCOL_ID, RECOMMENDATION_ID, METRIC_DATE, METRIC_KEY, METRIC_VALUE
+) VALUES (
+    NULL, :patient_id, :protocol_id, :recommendation_id, :metric_date, :metric_key, :metric_value
+);
+```
+
+Replaces: `add_recsys_metric_entry`. Consumer: ai-cdss (scope `rw`).
+
+---
+
 ## Not in v1
 
 | statement | why |
 |---|---|
-| `add_prescription_staging_entry`, `add_recsys_metric_entry` | writes; ai-cdss prod keeps `SqlBackend` until `POST /v1/staging`, `POST /v1/recsys_metrics` exist |
-| `fetch_patients`, `fetch_patients_by_hospital`, `fetch_patients_by_name` | no consumer; add `GET /v1/patients` if one appears |
-| `query_emotional.sql`, `query_patient.sql` | no consumer |
-| `query_old.sql`, `query__.sql`, `query_all.sql` | dead — delete |
+| `query_emotional.sql`, `query_patient.sql` | no consumer — parked in `queries/_unused/`, not registered |
+| `query_old.sql`, `query__.sql`, `query_all.sql` | dead — deleted |
+| `fetch_timeseries_data` | client-side `dm_data ⋈ pe_data` merge, not an endpoint |
 
-## Table grants for the read-only API user
+## Table grants for the API user
 
-`patient`, `patient_aisn_data`, `hospital`, `clinical_trials`, `prescription_staging`,
+`SELECT` on `patient`, `patient_aisn_data`, `hospital`, `clinical_trials`, `prescription_staging`,
 `prescription_plus`, `session_plus`, `recording_plus`, `difficulty_modulators_plus`,
 `performance_estimators_plus`, `recsys_metrics`, `protocol`, `protocol_type`
-(+ `*_app` variants only if `rgs_mode=app` is kept).
+(+ `*_app` variants). `INSERT` on `prescription_staging`, `recsys_metrics` only.
 
 ## Source map
 
