@@ -410,7 +410,7 @@ Consumers: cli.
 
 ### `POST /v1/staging`
 
-Body = one `PrescriptionStagingRow` (pydantic, in `rgs_interface.schemas`): `patient_id`,
+Body = one `PrescriptionStagingRow` (pydantic, in `rgs_interface.models`): `patient_id`,
 `protocol_id`, `starting_date`, `ending_date`, `weekday` (enum), `session_duration`,
 `recommendation_id` (UUID), `weeks_since_start`, `status` (enum). Response
 `{"id": <PRESCRIPTION_STAGING_ID>}`.

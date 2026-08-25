@@ -41,8 +41,7 @@ version. Validation happens once, at the source; clients trust the server.
 ```
 src/rgs_interface/
 ├── __init__.py        from .sql import SqlBackend ; from .http import HttpBackend
-├── models.py          13 pydantic row models (the read contract)
-├── schemas.py         PrescriptionStagingRow, RecsysMetricsRow as pydantic (the write contract) + enums
+├── models.py          13 read rows + 2 write bodies + enums (the contract)
 ├── registry.py        Query / Write dataclasses, param models, QUERIES + WRITES dicts
 ├── queries/           13 read .sql  (rgs_data/dm_data/pe_data were sql/query*.sql) + _unused/
 ├── writes/            staging.sql, recsys_metrics.sql
@@ -303,7 +302,7 @@ import pandas as pd
 from sqlalchemy import text, bindparam, event
 from sqlalchemy.engine import Engine
 from rgs_interface.registry import QUERIES, sql_text
-from rgs_interface.schemas import PrescriptionStagingRow, RecsysMetricsRow
+from rgs_interface.models import PrescriptionStagingRow, RecsysMetricsRow
 
 class SqlBackend:
     def __init__(self, engine: Engine, read_only: bool = True):

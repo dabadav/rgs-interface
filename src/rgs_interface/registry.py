@@ -21,7 +21,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from rgs_interface import models as M
-from rgs_interface import schemas as S
 
 PatientIds = list[int]
 
@@ -126,8 +125,8 @@ QUERIES: dict[str, Query] = {
 }
 
 WRITES: dict[str, Write] = {
-    "staging":        Write(S.PrescriptionStagingRow),
-    "recsys_metrics": Write(S.RecsysMetricsRow),
+    "staging":        Write(M.PrescriptionStagingRow),
+    "recsys_metrics": Write(M.RecsysMetricsRow),
 }
 
 

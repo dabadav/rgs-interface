@@ -5,8 +5,7 @@ one package.
 
 ```
 registry.py   name → Query(params, row) | Write(body); SQL in queries/<name>.sql, writes/<name>.sql
-models.py     pydantic row models — the read contract, validated on every API response
-schemas.py    pydantic write bodies (PrescriptionStagingRow, RecsysMetricsRow) + enums
+models.py     the contract: read rows (validated on every API response) + write bodies + enums
 sql.py        SqlBackend(engine).fetch(name, **params) / .write(name, body)   — direct MySQL
 http.py       HttpBackend(url, token).fetch(...) / .write(...)                — via the API
 server.py     FastAPI app: GET /v1/<name> per query, POST /v1/<name> per write   [server]
@@ -39,7 +38,7 @@ cohort = db.fetch("cohort", exclude_control=True, active=True)
 staged = db.fetch("staging", patient_ids=[4378], week=4)
 rgs    = db.fetch("rgs_data", patient_ids=[4378], rgs_mode="plus")
 
-from rgs_interface.schemas import PrescriptionStagingRow
+from rgs_interface.models import PrescriptionStagingRow
 new_id = db.write("staging", PrescriptionStagingRow(...))   # needs an rw token
 ```
 
