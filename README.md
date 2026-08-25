@@ -17,7 +17,13 @@ pip install "rgs-interface[sql] @ git+https://github.com/dabadav/rgs-interface@v
 
 Then store your API url and token once: `rgs-cli credentials set`.
 
-Server setup: [`docs/DEPLOY.md`](docs/DEPLOY.md). Full list of queries and their columns: [`docs/API_ENDPOINTS.md`](docs/API_ENDPOINTS.md).
+### 📚 Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [`docs/API_ENDPOINTS.md`](docs/API_ENDPOINTS.md) | Every query: parameters, returned columns, SQL |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Running the API on the database server (install, tokens, service, nginx) |
+| [`docs/API_CONTRACT_PLAN.md`](docs/API_CONTRACT_PLAN.md) | Design and the decisions behind it |
 
 ### 📖 Python Module Usage
 
