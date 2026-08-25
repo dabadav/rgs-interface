@@ -20,19 +20,17 @@ app.add_typer(credentials_app, name="credentials")
 
 
 def _backend(direct: bool):
-    if direct:
-        from rgs_interface.db import get_db_engine
-        from rgs_interface.sql import SqlBackend
+    try:
+        if direct:
+            from rgs_interface.sql import SqlBackend
 
-        return SqlBackend(get_db_engine(), read_only=True)
-    from rgs_interface.config import get_api_config
-    from rgs_interface.http import HttpBackend
+            return SqlBackend.from_config(read_only=True)
+        from rgs_interface.http import HttpBackend
 
-    cfg = get_api_config()
-    if not cfg:
-        typer.echo("No API credentials. Run: rgs-cli credentials set", err=True)
+        return HttpBackend.from_config()
+    except RuntimeError as e:
+        typer.echo(f"{e}. Run: rgs-cli credentials set", err=True)
         raise typer.Exit(1)
-    return HttpBackend(cfg["RGS_API_URL"], cfg["RGS_API_TOKEN"])
 
 
 def _parse_params(items: list[str]) -> dict:

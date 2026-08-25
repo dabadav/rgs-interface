@@ -43,9 +43,7 @@ def backend() -> SqlBackend:
     """Lazily built so tests can inject a stub via ``server._backend``."""
     global _backend
     if _backend is None:
-        from rgs_interface.db import get_db_engine
-
-        _backend = SqlBackend(get_db_engine(), read_only=False)
+        _backend = SqlBackend.from_config(read_only=False)
     return _backend
 
 

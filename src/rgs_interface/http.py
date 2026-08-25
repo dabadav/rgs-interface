@@ -16,6 +16,16 @@ PARQUET = "application/vnd.apache.parquet"
 
 
 class HttpBackend:
+    @classmethod
+    def from_config(cls, **kwargs) -> "HttpBackend":
+        """Client from RGS_API_URL / RGS_API_TOKEN (env, .env or ~/.rgs_config.yaml)."""
+        from rgs_interface.config import get_api_config
+
+        cfg = get_api_config()
+        if not cfg:
+            raise RuntimeError("API credentials not found (RGS_API_URL/RGS_API_TOKEN)")
+        return cls(cfg["RGS_API_URL"], cfg["RGS_API_TOKEN"], **kwargs)
+
     def __init__(self, base_url: str, token: str, timeout: float = 120.0, retries: int = 3):
         self.base = base_url.rstrip("/")
         self.timeout = timeout

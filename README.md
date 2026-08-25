@@ -32,7 +32,8 @@ Core has no database or HTTP dependency — only pandas, pyarrow and pydantic.
 from rgs_interface import HttpBackend, SqlBackend
 
 db = HttpBackend("https://api.rgs.example", token)          # anywhere
-# db = SqlBackend(get_db_engine())                          # where 3306 is reachable
+# db = SqlBackend.from_config()                             # where 3306 is reachable
+# both also accept explicit args: SqlBackend(engine), HttpBackend(url, token)
 
 cohort = db.fetch("cohort", exclude_control=True, active=True)
 staged = db.fetch("staging", patient_ids=[4378], week=4)
@@ -95,7 +96,7 @@ one is major. Servers and clients pin the same tag.
 
 ## Migrating from 0.4.x
 
-`DatabaseInterface` is gone. `DatabaseInterface()` → `SqlBackend(get_db_engine(), read_only=False)`;
+`DatabaseInterface` is gone. `DatabaseInterface()` → `SqlBackend.from_config(read_only=False)`;
 `fetch_rgs_data(ids, rgs_mode)` → `fetch("rgs_data", patient_ids=ids, rgs_mode=rgs_mode)`;
 `fetch_dm_data` → `fetch("dm_data", ...)`; `fetch_patients_by_study([s])` →
 `fetch("clinical_trials", study_id=s, due_today=True)`; `add_prescription_staging_entry(row)` →
