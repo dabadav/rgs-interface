@@ -16,15 +16,13 @@ FLUSH PRIVILEGES;
 ## 2. Install
 
 ```sh
-sudo useradd -r -s /usr/sbin/nologin rgsapi
-sudo git clone --branch v1.0.0 https://github.com/dabadav/rgs-interface /opt/rgs-interface
+git clone --branch v1.0.0 https://github.com/dabadav/rgs-interface /opt/rgs-interface
 cd /opt/rgs-interface
-sudo -u rgsapi uv venv --python 3.12 .venv
-sudo -u rgsapi uv pip install ".[server]"
-sudo cp .env.example .env && sudo chown rgsapi .env && sudo chmod 600 .env
+uv venv --python 3.12 .venv && uv pip install ".[server]"
+cp .env.example .env && chmod 600 .env
 ```
 
-Edit `/opt/rgs-interface/.env`:
+Edit `.env`:
 
 ```
 PORT=8000
@@ -32,22 +30,38 @@ DB_HOST=127.0.0.1
 DB_USER=api_user
 DB_PASS=<password>
 DB_NAME=global_prod
-API_TOKENS=<tok1>:supervisor:r,<tok2>:alert:r,<tok3>:aicdss:rw
+API_TOKENS=<token1>:supervisor:r,<token2>:alert:r,<token3>:aicdss:rw
 ```
 
-Tokens: `openssl rand -hex 24`, one per consumer. `rw` only for ai-cdss.
+## 3. Tokens
 
-## 3. Check before exposing
+The API has no user accounts. Each client program gets one secret string (a token) and
+sends it on every request as `Authorization: Bearer <token>`. The server accepts a request
+only if the token is in `API_TOKENS`.
+
+`API_TOKENS` is a comma-separated list of `token:name:scope`:
+
+- `token`: any random string. Generate one per client with `openssl rand -hex 24`.
+- `name`: a label for the log lines (`supervisor`, `alert`, `aicdss`). Not checked, just printed.
+- `scope`: `r` = read only (GET), `rw` = may also write (POST). Only ai-cdss writes.
+
+Give each client its own token so one can be revoked without touching the others. To
+revoke or rotate: edit `API_TOKENS`, `systemctl restart rgs-api`, update the client.
+The tokens live only in `.env` on this server and in each client's secret store.
+
+## 4. Check before exposing
 
 ```sh
-sudo -u rgsapi env $(cat .env | xargs) RGS_TEST_DB_URL="mysql+pymysql://api_user:<password>@127.0.0.1/global_prod" \
-  .venv/bin/python -m pytest -q
+RGS_TEST_DB_URL="mysql+pymysql://api_user:<password>@127.0.0.1/global_prod" .venv/bin/python -m pytest -q
 ```
 
 Runs every query directly and through the API and checks the columns and types. If
 something fails it names the query; fix before continuing.
 
-## 4. Service
+## 5. Service
+
+Set `User=` in `deploy/rgs-api.service` to the account that owns `/opt/rgs-interface`
+(same as your other services), then:
 
 ```sh
 sudo cp deploy/rgs-api.service /etc/systemd/system/
@@ -55,7 +69,7 @@ sudo systemctl enable --now rgs-api
 curl -H "Authorization: Bearer <tok1>" http://127.0.0.1:8000/v1/health
 ```
 
-## 5. nginx
+## 6. nginx
 
 Either a subdomain or a path under the existing site. See `deploy/nginx.conf`. For a
 path, also set `ROOT_PATH=/rgs-api` in `.env` and restart the service. TLS with
@@ -64,8 +78,8 @@ path, also set `ROOT_PATH=/rgs-api` in `.env` and restart the service. TLS with
 ## Update
 
 ```sh
-cd /opt/rgs-interface && sudo git fetch --tags && sudo git checkout v1.1.0
-sudo -u rgsapi uv pip install ".[server]"
+cd /opt/rgs-interface && git fetch --tags && git checkout v1.1.0
+uv pip install ".[server]"
 sudo systemctl restart rgs-api
 ```
 
@@ -76,5 +90,5 @@ Rollback: check out the previous tag and repeat.
 - Logs: `journalctl -u rgs-api -f`. One line per request: consumer, query, rows.
 - 401 bad token, 403 read-only token on POST, 422 bad parameters, 500 with a model name:
   data no longer matches the contract.
-- Consumers get the URL and their token. Supervisor: `RGS_API_URL`, `RGS_API_TOKEN`.
-  Alert: `DB_API_URL`, `DB_API_TOKEN`.
+- Hand each client its URL and token. Supervisor: `RGS_API_URL`, `RGS_API_TOKEN`.
+  Alert: `DB_API_URL`, `DB_API_TOKEN`. People using `rgs-cli`: `rgs-cli credentials set`.

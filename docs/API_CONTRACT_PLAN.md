@@ -74,16 +74,15 @@ dependencies = ["pandas[parquet]>=2.2,<3", "pydantic>=2.7,<3", "pyyaml", "python
 sql    = ["sqlalchemy>=2.0,<3", "pymysql>=1.1,<2"]
 http   = ["requests>=2.32,<3"]
 server = ["rgs-interface[sql]", "fastapi>=0.115", "uvicorn[standard]>=0.30"]
-cli    = ["rgs-interface[http]", "typer>=0.12"]
 ```
 
 | project | installs | uses |
 |---|---|---|
 | API server (DB host) | `rgs-interface[server]` | `uvicorn rgs_interface.server:app` |
-| cdss-supervisor | `rgs-interface[http]` | `HttpBackend(url, token)` |
+| cdss-supervisor | `rgs-interface` | `HttpBackend(url, token)` |
 | ai-cdss prod (today) | `rgs-interface@v0.4.1`: frozen | unchanged |
-| ai-cdss when it upgrades | `rgs-interface[http]` | `HttpBackend(url, rw_token)`; 3 fetch + 2 write calls renamed; no 3306 needed |
-| rgs-cli | `rgs-interface[cli]` | `HttpBackend` from `~/.rgs_config.yaml`; `--direct` → `SqlBackend` |
+| ai-cdss when it upgrades | `rgs-interface` | `HttpBackend(url, rw_token)`; 3 fetch + 2 write calls renamed; no 3306 needed |
+| rgs-cli | `rgs-interface` | `HttpBackend` from `~/.rgs_config.yaml`; `--direct` → `SqlBackend` |
 | cdss-alert (JS) | nothing | `fetch()` with `Accept: application/json` |
 
 ## Code

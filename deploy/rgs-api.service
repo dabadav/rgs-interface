@@ -3,7 +3,7 @@ Description=RGS DB API
 After=network.target mysql.service
 
 [Service]
-User=rgsapi
+User=www-data            # the account that owns /opt/rgs-interface
 WorkingDirectory=/opt/rgs-interface
 EnvironmentFile=/opt/rgs-interface/.env
 ExecStart=/opt/rgs-interface/.venv/bin/uvicorn rgs_interface.server:app --host 127.0.0.1 --port ${PORT}
