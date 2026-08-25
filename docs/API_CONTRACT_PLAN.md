@@ -48,7 +48,7 @@ src/rgs_interface/
 ├── sql.py             SqlBackend: fetch, write
 ├── http.py            HttpBackend: fetch, write
 ├── server.py          FastAPI app; GET per Query, POST per Write; scopes; validation   (extra: [server])
-├── config.py          credential sources (DB_*, RGS_API_*); backends expose .from_config()
+├── config.py          credential sources (DB_*, RGS_API_*) + make_engine(); backends expose .from_config()
 └── cli.py             credentials set/check, fetch <name>, list-patients; HttpBackend by default, --direct for SQL  (extra: [cli])
 
 Dockerfile             python:3.12-slim, pip install ".[server]", uvicorn rgs_interface.server:app

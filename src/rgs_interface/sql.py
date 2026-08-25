@@ -49,16 +49,10 @@ def _statement(sql: str, params: dict):
 class SqlBackend:
     @classmethod
     def from_config(cls, read_only: bool = True, **engine_kwargs) -> "SqlBackend":
-        """Engine from DB_USER/DB_PASS/DB_HOST/DB_NAME (env, .env or ~/.rgs_config.yaml)."""
-        from sqlalchemy import create_engine
+        """Engine from DB_* credentials (env, .env or ~/.rgs_config.yaml)."""
+        from rgs_interface.config import make_engine
 
-        from rgs_interface.config import get_config
-
-        cfg = get_config()
-        if not cfg:
-            raise RuntimeError("DB credentials not found (DB_USER/DB_PASS/DB_HOST/DB_NAME)")
-        url = f"mysql+pymysql://{cfg['DB_USER']}:{cfg['DB_PASS']}@{cfg['DB_HOST']}/{cfg['DB_NAME']}"
-        return cls(create_engine(url, pool_pre_ping=True, **engine_kwargs), read_only=read_only)
+        return cls(make_engine(**engine_kwargs), read_only=read_only)
 
     def __init__(self, engine: Engine, read_only: bool = True):
         if engine is None:

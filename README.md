@@ -34,6 +34,7 @@ from rgs_interface import HttpBackend, SqlBackend
 db = HttpBackend("https://api.rgs.example", token)          # anywhere
 # db = SqlBackend.from_config()                             # where 3306 is reachable
 # both also accept explicit args: SqlBackend(engine), HttpBackend(url, token)
+# raw engine without a backend: rgs_interface.config.make_engine()
 
 cohort = db.fetch("cohort", exclude_control=True, active=True)
 staged = db.fetch("staging", patient_ids=[4378], week=4)

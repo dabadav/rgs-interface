@@ -82,6 +82,17 @@ def get_api_config():
     return None
 
 
+def make_engine(**engine_kwargs):
+    """SQLAlchemy engine from DB_* credentials. Needs the [sql] extra."""
+    from sqlalchemy import create_engine  # lazy: core install has no sqlalchemy
+
+    cfg = get_config()
+    if not cfg:
+        raise RuntimeError("DB credentials not found (DB_USER/DB_PASS/DB_HOST/DB_NAME)")
+    url = f"mysql+pymysql://{cfg['DB_USER']}:{cfg['DB_PASS']}@{cfg['DB_HOST']}/{cfg['DB_NAME']}"
+    return create_engine(url, pool_pre_ping=True, **engine_kwargs)
+
+
 def save_yaml(**values):
     """Merge key/values into ~/.rgs_config.yaml (keeps existing keys)."""
     data = {}
