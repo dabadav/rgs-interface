@@ -1,98 +1,80 @@
 # Deploy the RGS DB API
 
-The API runs on the database host itself, so MySQL is reached on `127.0.0.1:3306` and
-port 3306 stays closed to the outside. Only 80/443 are exposed, via Caddy with automatic
-Let's Encrypt certificates.
+Runs on the database host as a normal system service. No Docker. Needs Python 3.12,
+`uv`, and the existing nginx.
 
-### 0. Prerequisites (once)
-
-- SSH access to the server; Docker + Compose installed
-  (`curl -fsSL https://get.docker.com | sh`).
-- A DNS `A` record, e.g. `api.rgs.eodyne.com` → server IP.
-- Firewall: allow `22`, `80`, `443`; keep `3306` closed.
-- A MySQL user for the API (run as root on the server):
+## 1. MySQL user
 
 ```sql
-CREATE USER 'api_user'@'localhost' IDENTIFIED BY '<strong password>';
-GRANT SELECT ON global_prod.patient                        TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.patient_aisn_data              TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.hospital                       TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.clinical_trials                TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.prescription_plus              TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.session_plus                   TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.recording_plus                 TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.difficulty_modulators_plus     TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.performance_estimators_plus    TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.protocol                       TO 'api_user'@'localhost';
-GRANT SELECT ON global_prod.protocol_type                  TO 'api_user'@'localhost';
-GRANT SELECT, INSERT ON global_prod.prescription_staging   TO 'api_user'@'localhost';
-GRANT SELECT, INSERT ON global_prod.recsys_metrics         TO 'api_user'@'localhost';
--- add the *_app tables too if rgs_mode=app is used
+CREATE USER 'api_user'@'localhost' IDENTIFIED BY '<password>';
+GRANT SELECT ON global_prod.* TO 'api_user'@'localhost';
+GRANT INSERT ON global_prod.prescription_staging TO 'api_user'@'localhost';
+GRANT INSERT ON global_prod.recsys_metrics       TO 'api_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-### 1. Install
+## 2. Install
 
 ```sh
-ssh user@server
-sudo mkdir -p /opt/rgs-interface && sudo chown $USER /opt/rgs-interface
-git clone --branch v1.0.0 https://github.com/dabadav/rgs-interface /opt/rgs-interface   # private: use a PAT or deploy key
+sudo useradd -r -s /usr/sbin/nologin rgsapi
+sudo git clone --branch v1.0.0 https://github.com/dabadav/rgs-interface /opt/rgs-interface
 cd /opt/rgs-interface
-cp .env.example .env && chmod 600 .env
+sudo -u rgsapi uv venv --python 3.12 .venv
+sudo -u rgsapi uv pip install ".[server]"
+sudo cp .env.example .env && sudo chown rgsapi .env && sudo chmod 600 .env
 ```
 
-Edit `.env`:
+Edit `/opt/rgs-interface/.env`:
 
 ```
-API_DOMAIN=api.rgs.eodyne.com
+PORT=8000
 DB_HOST=127.0.0.1
 DB_USER=api_user
-DB_PASS=<password from step 0>
+DB_PASS=<password>
 DB_NAME=global_prod
-API_TOKENS=<tok1>:supervisor:r,<tok2>:alert:r,<tok3>:aicdss:rw     # openssl rand -hex 24 for each
+API_TOKENS=<tok1>:supervisor:r,<tok2>:alert:r,<tok3>:aicdss:rw
 ```
 
-### 2. Verify against the real data before exposing anything
+Tokens: `openssl rand -hex 24`, one per consumer. `rw` only for ai-cdss.
+
+## 3. Check before exposing
 
 ```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh          # if uv is missing
-uv venv --python 3.12 .venv && uv pip install -e ".[dev]"
-RGS_TEST_DB_URL="mysql+pymysql://api_user:${DB_PASS}@127.0.0.1/global_prod" .venv/bin/pytest -q
+sudo -u rgsapi env $(cat .env | xargs) RGS_TEST_DB_URL="mysql+pymysql://api_user:<password>@127.0.0.1/global_prod" \
+  .venv/bin/python -m pytest -q
 ```
 
-`tests/test_contract_db.py` runs every query directly and through the API and checks the
-rows against the models. A failure names the query and the offending column: fix the
-model (or the SQL) before going on.
+Runs every query directly and through the API and checks the columns and types. If
+something fails it names the query; fix before continuing.
 
-### 3. Start
+## 4. Service
 
 ```sh
-docker compose up -d --build
-docker compose logs -f api            # first request logs "supervisor cohort rows=…"
-curl https://api.rgs.eodyne.com/v1/health -H "Authorization: Bearer <tok1>"
+sudo cp deploy/rgs-api.service /etc/systemd/system/
+sudo systemctl enable --now rgs-api
+curl -H "Authorization: Bearer <tok1>" http://127.0.0.1:8000/v1/health
 ```
 
-Caddy obtains the certificate on first request; allow ~30 s.
+## 5. nginx
 
-### 4. Hand out
+Either a subdomain or a path under the existing site. See `deploy/nginx.conf`. For a
+path, also set `ROOT_PATH=/rgs-api` in `.env` and restart the service. TLS with
+`certbot --nginx` as for the other sites.
 
-- Supervisor (Cloud Run): env `RGS_API_URL=https://api.rgs.eodyne.com`, secret `RGS_API_TOKEN=<tok1>`.
-- Alert (Cloudflare Worker): `DB_API_URL`, secret `DB_API_TOKEN=<tok2>`.
-- ai-cdss (when upgraded): `<tok3>`: the only `rw` token.
-
-### Update
+## Update
 
 ```sh
-cd /opt/rgs-interface && git fetch --tags && git checkout v1.1.0
-docker compose up -d --build            # rebuilds the image, restarts the api; caddy untouched
+cd /opt/rgs-interface && sudo git fetch --tags && sudo git checkout v1.1.0
+sudo -u rgsapi uv pip install ".[server]"
+sudo systemctl restart rgs-api
 ```
 
-Rollback = `git checkout <previous tag>` + the same command.
+Rollback: check out the previous tag and repeat.
 
-### Operate
+## Operate
 
-- `docker compose logs -f api`: one line per request: consumer, query, row count.
-- 401 = bad token, 403 = read-only token on POST, 422 = bad params, 500 with a model name =
-  data no longer matches the contract (check `DESCRIBE` on that table).
-- `API_VALIDATE=0` in `.env` disables response validation: for emergencies only.
-- Secrets never leave the server: `.env` is `chmod 600` and git-ignored.
+- Logs: `journalctl -u rgs-api -f`. One line per request: consumer, query, rows.
+- 401 bad token, 403 read-only token on POST, 422 bad parameters, 500 with a model name:
+  data no longer matches the contract.
+- Consumers get the URL and their token. Supervisor: `RGS_API_URL`, `RGS_API_TOKEN`.
+  Alert: `DB_API_URL`, `DB_API_TOKEN`.

@@ -7,9 +7,10 @@ before serialisation (``API_VALIDATE=0`` disables — escape hatch, not a plan).
 Env:
   API_TOKENS   "token:consumer:scope,..."  scope is "r" or "rw"
   API_VALIDATE "1" (default) | "0"
+  ROOT_PATH    URL prefix when proxied under a path, e.g. "/rgs-api" (default "")
   DB_*         see rgs_interface.config
 
-Run:  uvicorn rgs_interface.server:app --host 0.0.0.0 --port 8000
+Run:  uvicorn rgs_interface.server:app --host 127.0.0.1 --port 8000
 """
 
 
@@ -32,7 +33,7 @@ PARQUET = "application/vnd.apache.parquet"
 def _validate() -> bool:
     return os.environ.get("API_VALIDATE", "1") == "1"
 
-app = FastAPI(title="RGS DB API", version="1")
+app = FastAPI(title="RGS DB API", version="1", root_path=os.environ.get("ROOT_PATH", ""))
 
 # ---------------------------------------------------------------- backend
 
