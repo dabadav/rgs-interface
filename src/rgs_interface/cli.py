@@ -147,7 +147,7 @@ def server_init(
     port: int = typer.Option(8000, help="Local port uvicorn listens on"),
     root_path: Optional[str] = typer.Option(None, help="URL prefix if nginx serves the API under a path, e.g. /rgs-api"),
     unit: bool = typer.Option(False, "--unit", help="Print a systemd unit for this directory instead of writing .env"),
-    user: str = typer.Option("www-data", help="System user for the unit (with --unit)"),
+    user: str = typer.Option("rgsapi", help="System user for the unit (with --unit)"),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing .env"),
 ):
     """Write .env with fresh tokens in the current directory, or print a systemd unit."""

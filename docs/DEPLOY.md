@@ -58,12 +58,13 @@ The tokens live only in `.env` on this server and in each client's secret store.
 
 ## 4. Service
 
-Print the unit for this directory and install it (`--user` = the account that owns
-`/opt/rgs-api`, same as your other services; default `www-data`):
+Run the API as its own system user so only it can read `.env`. Print the unit for this
+directory and install it (`--user` if your convention differs):
 
 ```sh
-.venv/bin/rgs-cli server init --unit --user www-data | sudo tee /etc/systemd/system/rgs-api.service
-sudo chown -R www-data /opt/rgs-api        # the service user must read .env and the venv
+sudo useradd -r -s /usr/sbin/nologin rgsapi
+sudo chown -R rgsapi /opt/rgs-api
+.venv/bin/rgs-cli server init --unit | sudo tee /etc/systemd/system/rgs-api.service
 ```
 
 It looks like this:
@@ -75,7 +76,7 @@ Wants=network-online.target
 After=network-online.target mysql.service mariadb.service
 
 [Service]
-User=www-data
+User=rgsapi
 WorkingDirectory=/opt/rgs-api
 EnvironmentFile=/opt/rgs-api/.env
 ExecStart=/opt/rgs-api/.venv/bin/uvicorn rgs_interface.server:app --host 127.0.0.1 --port ${PORT}
