@@ -18,21 +18,34 @@ FLUSH PRIVILEGES;
 ## 2. Install
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh
-less install.sh          # read it first
-sudo sh install.sh
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo sh
 ```
 
-What it does, in order: installs `uv` if missing (binary only, no shell changes), creates
-the `rgsapi` system user, installs `rgs-interface[server]` into `/opt/rgs-api/.venv`, asks
-for the MySQL password and writes `/opt/rgs-api/.env` (mode 600) with one fresh token per
-client, installs and starts the `rgs-api` systemd service, and checks `/v1/health`. It
-prints the tokens once; hand each to its client.
+Before changing anything the script checks prerequisites, takes a checksum snapshot of the
+trial's files (`~/.rgs_config.yaml`, `~/.ai_cdss`, `.env`, the existing `rgs-cli`), prints
+its plan and asks `Proceed? [y/N]`. Then it installs `uv` if missing (binary only, no shell
+changes), creates the `rgsapi` system user, installs `rgs-interface[server]` into
+`/opt/rgs-api/.venv`, asks for the MySQL password and writes `/opt/rgs-api/.env` (mode 600)
+with one fresh token per client, installs and starts the `rgs-api` service, checks
+`/v1/health`, and re-checks the snapshot: it ends with `trial files unchanged` or a diff.
+It prints the tokens once; hand each to its client.
+
+To see the checks and the plan without changing anything:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo RGS_DRY_RUN=1 sh
+```
+
+To remove everything it created (service, `/opt/rgs-api`, the `rgsapi` user; nothing else):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo sh -s uninstall
+```
 
 It writes only under `/opt/rgs-api`, plus `/usr/local/bin/uv`, the `rgsapi` user and the
 systemd unit. It never overwrites an existing `.env`, an unrelated unit, or a directory it
 did not create, and it does not read or write anything under `/root`, `/home` or any
-existing Python environment. If a test machine is available, run it there first.
+existing Python environment. The existing `rgs-cli` and ai-cdss keep running unchanged.
 
 The resulting `.env`:
 
@@ -47,8 +60,8 @@ API_VALIDATE=1
 ```
 
 Variables: `RGS_REF` (version tag, default `v1.0.0`), `RGS_DIR` (`/opt/rgs-api`),
-`RGS_USER` (`rgsapi`), `RGS_PORT` (`8000`). If nginx will serve the API under a path, add `ROOT_PATH=/rgs-api`
-to `.env` and `systemctl restart rgs-api`.
+`RGS_USER` (`rgsapi`), `RGS_PORT` (`8000`), `RGS_YES=1` (skip the prompt). If nginx will
+serve the API under a path, add `ROOT_PATH=/rgs-api` to `.env` and `systemctl restart rgs-api`.
 
 ## 3. Tokens
 
@@ -128,8 +141,7 @@ location /rgs-api/ {
 Same one-liner with the new tag; `.env` is kept.
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/dabadav/rgs-interface/v1.1.0/deploy/install.sh
-sudo RGS_REF=v1.1.0 sh install.sh
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.1.0/deploy/install.sh | sudo RGS_REF=v1.1.0 sh
 ```
 
 Rollback: same with the previous tag.
