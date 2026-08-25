@@ -494,7 +494,7 @@ Handlers unchanged: `protocolViolation.js`, `pendingPrescriptions.js` and the de
 | `SQL_PROTOCOLS` / `fetch_protocols()` | `GET /v1/protocols` |
 | `SQL_STAGING` / `fetch_staging(pid)` | `GET /v1/staging?patient_ids=4378` |
 | `SQL_STAGING_BULK` | `GET /v1/staging?patient_ids=4378&patient_ids=4380` |
-| inline `cur_df` (pid, week, rid) | `GET /v1/staging?patient_ids=4378&week=w&recommendation_id=8b5f1a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b` |
+| inline `cur_df` (pid, week, rid) | `GET /v1/staging?patient_ids=4378&week=4&recommendation_id=8b5f1a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b` |
 | inline `prev_df` (pid, week-1) | `GET /v1/staging?patient_ids=4378&week=3` |
 | inline `MAX(WEEKS_SINCE_START)` + `rid_df` | `GET /v1/staging_latest?patient_id=4378&week=4` |
 | `SQL_PRESCRIPTION` / `fetch_prescription(pid)` | `GET /v1/prescriptions?patient_ids=4378` |
@@ -521,7 +521,7 @@ Handlers unchanged: `protocolViolation.js`, `pendingPrescriptions.js` and the de
 
 | today (`rgs_interface`) | endpoint |
 |---|---|
-| `fetch_rgs_data` | `GET /v1/rgs_data?rgs_mode=plus` (parquet) |
-| `fetch_dm_data` | `GET /v1/dm_data` |
+| `fetch_rgs_data` | `GET /v1/rgs_data?patient_ids=4378&rgs_mode=plus` with `Accept: application/vnd.apache.parquet` |
+| `fetch_dm_data` | `GET /v1/dm_data?patient_ids=4378&rgs_mode=plus` |
 | `fetch_patients_by_study` | `GET /v1/clinical_trials?study_id=3&due_today=1` |
 | `_already_prescribed` | `GET /v1/staging?patient_ids=4378&week_start=2026-08-17` → `len(df) > 0` |
