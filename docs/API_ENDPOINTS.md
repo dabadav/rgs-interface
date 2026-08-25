@@ -478,9 +478,9 @@ Replaces: `add_recsys_metric_entry`. Consumer: ai-cdss (scope `rw`).
 | today (`queries.json`) | endpoint | params |
 |---|---|---|
 | `cohort` | `GET /v1/cohort` | `exclude_control=1&active=1` |
-| `protocol_staging` | `GET /v1/staging` | `patient_ids=…` |
-| `staging_pending` | `GET /v1/staging` | `patient_ids=…&status=Pending` |
-| `protocol_prescriptions` | `GET /v1/prescriptions` | `patient_ids=…` |
+| `protocol_staging` | `GET /v1/staging` | `patient_ids=4378&patient_ids=4380` |
+| `staging_pending` | `GET /v1/staging` | `patient_ids=4378&patient_ids=4380&status=Pending` |
+| `protocol_prescriptions` | `GET /v1/prescriptions` | `patient_ids=4378&patient_ids=4380` |
 
 Handlers unchanged: `protocolViolation.js`, `pendingPrescriptions.js` and the declarative
 `dropout_risk` alert read the same column names (`patient_id`, `trial_start`, `trial_arm`,
@@ -492,30 +492,30 @@ Handlers unchanged: `protocolViolation.js`, `pendingPrescriptions.js` and the de
 |---|---|
 | `SQL_COHORT` / `fetch_cohort()` | `GET /v1/cohort` (rename columns on ingest: `hospital_name→name`, `trial_arm→aisn_group`, `patient_name→patient_user`, `trial_start→start_date`, `trial_end→end_date`) |
 | `SQL_PROTOCOLS` / `fetch_protocols()` | `GET /v1/protocols` |
-| `SQL_STAGING` / `fetch_staging(pid)` | `GET /v1/staging?patient_ids=pid` |
-| `SQL_STAGING_BULK` | `GET /v1/staging?patient_ids=…` |
-| inline `cur_df` (pid, week, rid) | `GET /v1/staging?patient_ids=pid&week=w&recommendation_id=rid` |
-| inline `prev_df` (pid, week-1) | `GET /v1/staging?patient_ids=pid&week=w-1` |
-| inline `MAX(WEEKS_SINCE_START)` + `rid_df` | `GET /v1/staging_latest?patient_id=pid&week=w` |
-| `SQL_PRESCRIPTION` / `fetch_prescription(pid)` | `GET /v1/prescriptions?patient_ids=pid` |
-| `SQL_PRESCRIPTION_BULK` | `GET /v1/prescriptions?patient_ids=…` |
-| inline weekly `COUNT(*) prescription_plus` | `GET /v1/prescriptions?patient_ids=pid&active_from=…&active_to=…` → `len(df)` |
-| inline weekly `COUNT(*) session_plus CLOSED` | `GET /v1/sessions?patient_id=pid&status=CLOSED&since=…&until=…` → `len(df)` |
-| `SQL_ADHERENCE` / `fetch_adherence(pid)` | `GET /v1/adherence?patient_id=pid` |
-| inline `recsys_metrics` (pid, rid) | `GET /v1/recsys_metrics?patient_id=pid&recommendation_ids=rid` |
-| inline `CLINICAL_SCORES` | `GET /v1/clinical_trials?patient_ids=…&with_scores=1` |
+| `SQL_STAGING` / `fetch_staging(pid)` | `GET /v1/staging?patient_ids=4378` |
+| `SQL_STAGING_BULK` | `GET /v1/staging?patient_ids=4378&patient_ids=4380` |
+| inline `cur_df` (pid, week, rid) | `GET /v1/staging?patient_ids=4378&week=w&recommendation_id=8b5f1a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b` |
+| inline `prev_df` (pid, week-1) | `GET /v1/staging?patient_ids=4378&week=3` |
+| inline `MAX(WEEKS_SINCE_START)` + `rid_df` | `GET /v1/staging_latest?patient_id=4378&week=4` |
+| `SQL_PRESCRIPTION` / `fetch_prescription(pid)` | `GET /v1/prescriptions?patient_ids=4378` |
+| `SQL_PRESCRIPTION_BULK` | `GET /v1/prescriptions?patient_ids=4378&patient_ids=4380` |
+| inline weekly `COUNT(*) prescription_plus` | `GET /v1/prescriptions?patient_ids=4378&active_from=2026-08-17T00:00:00&active_to=2026-08-24T00:00:00` → `len(df)` |
+| inline weekly `COUNT(*) session_plus CLOSED` | `GET /v1/sessions?patient_id=4378&status=CLOSED&since=2026-08-17T00:00:00&until=2026-08-24T00:00:00` → `len(df)` |
+| `SQL_ADHERENCE` / `fetch_adherence(pid)` | `GET /v1/adherence?patient_id=4378` |
+| inline `recsys_metrics` (pid, rid) | `GET /v1/recsys_metrics?patient_id=4378&recommendation_ids=8b5f1a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b` |
+| inline `CLINICAL_SCORES` | `GET /v1/clinical_trials?patient_ids=4378&patient_ids=4380&with_scores=1` |
 | `SELECT 1` `/healthz` | `GET /v1/health` |
 
 ### cdss-supervisor replay + backtest (6 statements → 4 endpoints)
 
 | today | endpoint |
 |---|---|
-| `SQL_COHORT_ROW` | `GET /v1/cohort?patient_id=pid` |
-| `SQL_STAGING_WEEK` | `GET /v1/staging?patient_ids=pid&week=w` |
-| `SQL_STAGING_PRIOR_WEEK_ACCEPTED` | `GET /v1/staging?patient_ids=pid&week=w-1` (client does `DISTINCT PROTOCOL_ID, RECOMMENDATION_ID, STATUS`) |
-| `SQL_HISTORICAL_METRICS` | `GET /v1/recsys_metrics?patient_id=pid&recommendation_ids=…` |
+| `SQL_COHORT_ROW` | `GET /v1/cohort?patient_id=4378` |
+| `SQL_STAGING_WEEK` | `GET /v1/staging?patient_ids=4378&week=4` |
+| `SQL_STAGING_PRIOR_WEEK_ACCEPTED` | `GET /v1/staging?patient_ids=4378&week=3` (client does `DISTINCT PROTOCOL_ID, RECOMMENDATION_ID, STATUS`) |
+| `SQL_HISTORICAL_METRICS` | `GET /v1/recsys_metrics?patient_id=4378&recommendation_ids=8b5f1a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b` |
 | `SQL_AISN_COHORT` | `GET /v1/cohort?arm=RGS%2BAI` |
-| `SQL_PRIOR_PLUS` | `GET /v1/prescriptions?patient_ids=pid&active_from=…&active_to=…` → `drop_duplicates` |
+| `SQL_PRIOR_PLUS` | `GET /v1/prescriptions?patient_ids=4378&active_from=2026-08-17T00:00:00&active_to=2026-08-24T00:00:00` → `drop_duplicates` |
 
 ### ai-cdss via replay `--warmup` (4 → 3 endpoints)
 
@@ -523,5 +523,5 @@ Handlers unchanged: `protocolViolation.js`, `pendingPrescriptions.js` and the de
 |---|---|
 | `fetch_rgs_data` | `GET /v1/rgs_data?rgs_mode=plus` (parquet) |
 | `fetch_dm_data` | `GET /v1/dm_data` |
-| `fetch_patients_by_study` | `GET /v1/clinical_trials?study_id=…&due_today=1` |
-| `_already_prescribed` | `GET /v1/staging?patient_ids=pid&week_start=YYYY-MM-DD` → `len(df) > 0` |
+| `fetch_patients_by_study` | `GET /v1/clinical_trials?study_id=3&due_today=1` |
+| `_already_prescribed` | `GET /v1/staging?patient_ids=4378&week_start=2026-08-17` → `len(df) > 0` |
