@@ -379,7 +379,7 @@ Replaces: `rgs_interface.fetch_rgs_data`, `fetch_dm_data`, `fetch_pe_data`,
 
 | statement | why |
 |---|---|
-| `add_prescription_staging_entry`, `add_recsys_metric_entry` | writes; ai-cdss prod keeps `SqlBackend` until `POST /v1/staging`, `POST /v1/recsys-metrics` exist |
+| `add_prescription_staging_entry`, `add_recsys_metric_entry` | writes; ai-cdss prod keeps `SqlBackend` until `POST /v1/staging`, `POST /v1/recsys_metrics` exist |
 | `fetch_patients`, `fetch_patients_by_hospital`, `fetch_patients_by_name` | no consumer; add `GET /v1/patients` if one appears |
 | `query_emotional.sql`, `query_patient.sql` | no consumer |
 | `query_old.sql`, `query__.sql`, `query_all.sql` | dead — delete |
