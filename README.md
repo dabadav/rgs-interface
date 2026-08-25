@@ -25,10 +25,11 @@ Query Name                   | Description |
 | `rgs_data`                 | Retrieves RGS data for a list of patient IDs. |
 | `dm_data` / `pe_data`      | Retrieves time-series RGS data (difficulty modulators / performance estimators) for specified patient IDs. |
 | `patients`                 | Retrieves patient records; optionally filtered by hospital IDs or by a pattern match in the `PATIENT_USER` field using SQL `LIKE`. |
-| `cohort`, `staging`, `prescriptions`, `adherence`, … | Trial-supervision queries — see [`docs/API_ENDPOINTS.md`](docs/API_ENDPOINTS.md). |
+| `cohort`, `staging`, `prescriptions`, `adherence`, … | Trial-supervision queries: see [`docs/API_ENDPOINTS.md`](docs/API_ENDPOINTS.md). |
 
-\<details\>
-\<summary\>🔹 Fetching RGS Data\</summary\>
+<details>
+<summary>🔹 Fetching RGS Data</summary>
+
 
 ##### `db_handler.fetch("rgs_data", patient_ids=[...], rgs_mode="plus")`
 
@@ -101,10 +102,11 @@ finally:
 | 16798      | 775       | 224         | STANDARD  | 66509              | standard\_dm\_targetsNumber    | 0.4             | standard\_pe\_ratioErrors   | 1                 |
 | 16798      | 775       | 224         | STANDARD  | 90916              | standard\_dm\_targetsNumber    | 0.5             | standard\_pe\_ratioErrors   | 1                 |
 
-\</details\>
+</details>
 
-\<details\>
-\<summary\>🔹 Fetching Patient IDs\</summary\>
+<details>
+<summary>🔹 Fetching Patient IDs</summary>
+
 
 #### `db_handler.fetch("patients", hospital_ids=[...])`
 
@@ -165,7 +167,7 @@ finally:
     db_handler.close()
 ```
 
-\</details\>
+</details>
 
 ### 📖 CLI
 

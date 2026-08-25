@@ -61,7 +61,7 @@ RGS_TEST_DB_URL="mysql+pymysql://api_user:${DB_PASS}@127.0.0.1/global_prod" .ven
 ```
 
 `tests/test_contract_db.py` runs every query directly and through the API and checks the
-rows against the models. A failure names the query and the offending column — fix the
+rows against the models. A failure names the query and the offending column: fix the
 model (or the SQL) before going on.
 
 ### 3. Start
@@ -78,7 +78,7 @@ Caddy obtains the certificate on first request; allow ~30 s.
 
 - Supervisor (Cloud Run): env `RGS_API_URL=https://api.rgs.eodyne.com`, secret `RGS_API_TOKEN=<tok1>`.
 - Alert (Cloudflare Worker): `DB_API_URL`, secret `DB_API_TOKEN=<tok2>`.
-- ai-cdss (when upgraded): `<tok3>` — the only `rw` token.
+- ai-cdss (when upgraded): `<tok3>`: the only `rw` token.
 
 ### Update
 
@@ -91,8 +91,8 @@ Rollback = `git checkout <previous tag>` + the same command.
 
 ### Operate
 
-- `docker compose logs -f api` — one line per request: consumer, query, row count.
+- `docker compose logs -f api`: one line per request: consumer, query, row count.
 - 401 = bad token, 403 = read-only token on POST, 422 = bad params, 500 with a model name =
   data no longer matches the contract (check `DESCRIBE` on that table).
-- `API_VALIDATE=0` in `.env` disables response validation — for emergencies only.
+- `API_VALIDATE=0` in `.env` disables response validation: for emergencies only.
 - Secrets never leave the server: `.env` is `chmod 600` and git-ignored.

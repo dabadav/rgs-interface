@@ -1,4 +1,4 @@
-# RGS DB API — endpoint contract (v1)
+# RGS DB API: endpoint contract (v1)
 
 Compiled 2026-08-25 from every SQL statement issued by `cdss-supervisor@develop`
 (dashboard, replay, backtest), `cdss-alert`, `ai-cdss` and `rgs_interface` itself.
@@ -7,7 +7,7 @@ registry item in `rgs_interface.registry` and one route in `rgs_interface.server
 
 Conventions
 
-- Reads are `GET /v1/<registry name>` with query params — no path params. Writes are
+- Reads are `GET /v1/<registry name>` with query params: no path params. Writes are
   `POST /v1/<name>` with a JSON body validated by the same model that validates reads.
 - Bearer auth with scopes: `r` (supervisor, alert, cli) or `rw` (ai-cdss). `POST` on an `r`
   token → 403. `Accept: application/vnd.apache.parquet` → parquet (Python clients);
@@ -42,8 +42,8 @@ their filters, all off by default so the default shape equals the supervisor's.
 
 | param | type | default | effect |
 |---|---|---|---|
-| `patient_id` | int | — | single row (replay `SQL_COHORT_ROW`) |
-| `arm` | str | — | `pad.aisn_group = :arm` (backtest uses `RGS+AI`) |
+| `patient_id` | int |: | single row (replay `SQL_COHORT_ROW`) |
+| `arm` | str |: | `pad.aisn_group = :arm` (backtest uses `RGS+AI`) |
 | `exclude_control` | bool | false | `pad.aisn_group <> 'Control'` (alert) |
 | `active` | bool | false | `trial_start <= CURDATE() <= trial_end` (alert `HAVING trial_active = 1`) |
 
@@ -54,7 +54,7 @@ Columns: `patient_id`, `patient_name`, `hospital_name`, `trial_arm`, `trial_star
 > `start_date`, `end_date` and re-aliases them itself (`HOSPITAL_NAME`, `AISN_GROUP`,
 > `PATIENT_USER`). The API adopts the alert's snake_case aliases as canonical; the
 > supervisor's `fetch_cohort()` renames on the way in. This is the **one** place
-> column names change — flagged in the cutover plan.
+> column names change: flagged in the cutover plan.
 
 Canonical SQL:
 
@@ -113,7 +113,7 @@ Replaces: supervisor `SQL_PROTOCOLS`. Consumers: supervisor. Cache candidate (st
 
 ## 4. `GET /v1/staging`
 
-`prescription_staging` rows — CDSS proposals. Eight statements today differ only in
+`prescription_staging` rows: CDSS proposals. Eight statements today differ only in
 filters and column subsets; the endpoint returns the full column set and every filter
 is optional.
 
@@ -186,7 +186,7 @@ Replaces: supervisor inline `latest` and `rid_df`. Consumers: supervisor.
 
 ## 6. `GET /v1/prescriptions`
 
-`prescription_plus` rows — what clinicians actually prescribed.
+`prescription_plus` rows: what clinicians actually prescribed.
 
 | param | type | effect |
 |---|---|---|
@@ -319,7 +319,7 @@ Consumers: supervisor, replay.
 ## 10. `GET /v1/clinical_trials`
 
 Two uses: clinical scores per patient, and the **production CDSS trigger** query
-(`fetch_patients_by_study`) — patients whose weekly recommendation is due today.
+(`fetch_patients_by_study`): patients whose weekly recommendation is due today.
 
 | param | type | effect |
 |---|---|---|
@@ -381,7 +381,7 @@ Replaces: `rgs_interface.fetch_rgs_data`, `fetch_dm_data`, `fetch_pe_data`,
 
 ## 12. `GET /v1/patients`
 
-`patient` table lookups — used by `rgs-cli list-patients` and kept for ad-hoc use.
+`patient` table lookups: used by `rgs-cli list-patients` and kept for ad-hoc use.
 
 | param | type | effect |
 |---|---|---|
@@ -449,8 +449,8 @@ Replaces: `add_recsys_metric_entry`. Consumer: ai-cdss (scope `rw`).
 
 | statement | why |
 |---|---|
-| `query_emotional.sql`, `query_patient.sql` | no consumer — parked in `queries/_unused/`, not registered |
-| `query_old.sql`, `query__.sql`, `query_all.sql` | dead — deleted |
+| `query_emotional.sql`, `query_patient.sql` | no consumer: parked in `queries/_unused/`, not registered |
+| `query_old.sql`, `query__.sql`, `query_all.sql` | dead: deleted |
 | `fetch_timeseries_data` | client-side `dm_data ⋈ pe_data` merge, not an endpoint |
 
 ## Table grants for the API user

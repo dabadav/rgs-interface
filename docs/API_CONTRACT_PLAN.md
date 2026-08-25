@@ -1,4 +1,4 @@
-# rgs_interface v1 — minimal DB contract + API
+# rgs_interface v1: minimal DB contract + API
 
 Status: **agreed 2026-08-25**, implementation in progress on branch `feat/api-contract`.
 
@@ -22,14 +22,14 @@ Endpoint list and SQL: [`API_ENDPOINTS.md`](API_ENDPOINTS.md).
 
 Three ideas, nothing else:
 
-1. **Registry** — reads: `name → Query(param model, row model)`, SQL in `queries/<name>.sql`;
+1. **Registry**: reads: `name → Query(param model, row model)`, SQL in `queries/<name>.sql`;
    writes: `name → Write(body model)`, SQL in `writes/<name>.sql`. The row/body model is
    the contract: field names are the columns, field types are validated on every response
    (reads) or request (writes).
-2. **Two backends, two methods** — `fetch(name, **params) -> DataFrame` and
+2. **Two backends, two methods**: `fetch(name, **params) -> DataFrame` and
    `write(name, body) -> int`. `SqlBackend` runs SQL; `HttpBackend` calls
    `GET|POST /v1/<name>`.
-3. **Server is a loop** — for each read entry mount `GET`, for each write entry mount
+3. **Server is a loop**: for each read entry mount `GET`, for each write entry mount
    `POST`; validate params/body, run the backend, validate rows, return parquet or JSON by
    `Accept`. Bearer tokens carry a scope (`r` / `rw`); `POST` needs `rw`.
 
@@ -81,7 +81,7 @@ cli    = ["rgs-interface[http]", "typer>=0.12"]
 |---|---|---|
 | API server (DB host) | `rgs-interface[server]` | `uvicorn rgs_interface.server:app` |
 | cdss-supervisor | `rgs-interface[http]` | `HttpBackend(url, token)` |
-| ai-cdss prod (today) | `rgs-interface@v0.4.1` — frozen | unchanged |
+| ai-cdss prod (today) | `rgs-interface@v0.4.1`: frozen | unchanged |
 | ai-cdss when it upgrades | `rgs-interface[http]` | `HttpBackend(url, rw_token)`; 3 fetch + 2 write calls renamed; no 3306 needed |
 | rgs-cli | `rgs-interface[cli]` | `HttpBackend` from `~/.rgs_config.yaml`; `--direct` → `SqlBackend` |
 | cdss-alert (JS) | nothing | `fetch()` with `Accept: application/json` |
@@ -323,7 +323,7 @@ class SqlBackend:
         with self.engine.connect() as conn:
             return pd.read_sql(stmt, conn, params=p)
 
-    # writes — moved verbatim from data/interface.py; require read_only=False
+    # writes: moved verbatim from data/interface.py; require read_only=False
     def add_prescription_staging_entry(self, entry: PrescriptionStagingRow) -> int | None: ...
     def add_recsys_metric_entry(self, entry: RecsysMetricsRow) -> int | None: ...
 ```
@@ -349,7 +349,7 @@ class HttpBackend:
 ```
 
 `requests` serialises list values as repeated params (`patient_ids=1&patient_ids=2`).
-Retries on 502/503/504 via `urllib3.Retry` on the session adapter — 5 lines, not shown.
+Retries on 502/503/504 via `urllib3.Retry` on the session adapter: 5 lines, not shown.
 
 ### `server.py`
 
@@ -439,7 +439,7 @@ no mocks.
 2. `models.py`, `registry.py` + `queries/*.sql` from `API_ENDPOINTS.md`.
 3. `sql.py` (lift `_fetch` + the two writes), `http.py`.
 4. `server.py`, `Dockerfile`, `docker-compose.yml`.
-5. `tests/` — fixture + parity test.
+5. `tests/`: fixture + parity test.
 6. `cli.py`: drop `list_patients`/`_save_rgs_data`; `fetch` → `rgs-cli fetch <name> --patient-ids …`.
 7. `pyproject.toml`: 1.0.0, deps/extras above, drop poetry-specific sections if moving to hatchling.
 8. Tag `v1.0.0`. CHANGELOG: `DatabaseInterface` removed (use `SqlBackend`), `preprocess` removed, extras.
