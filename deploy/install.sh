@@ -1,7 +1,7 @@
 #!/bin/sh
 # RGS DB API installer for the database host. Run as root.
 #
-#   curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo sh
+#   curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0-rc4/deploy/install.sh | sudo sh
 #   ... | sudo RGS_DRY_RUN=1 sh        show checks and plan, change nothing
 #   ... | sudo sh -s uninstall         remove everything this script created
 #
@@ -15,14 +15,14 @@
 #   $RGS_DIR/**                            venv, Python, uv cache, .env (never overwritten)
 #   /etc/systemd/system/rgs-api.service    if absent or already ours
 #
-#   RGS_REF    version tag (default v1.0.0)
+#   RGS_REF    version tag (default v1.0.0-rc4)
 #   RGS_DIR    install dir, /opt/<name> or /srv/<name> (default /opt/rgs-api)
 #   RGS_USER   service user (default rgsapi)
 #   RGS_PORT   local port (default 8000; only used when creating .env)
 #   RGS_YES=1  skip the confirmation prompt
 set -eu
 
-REF="${RGS_REF:-v1.0.0}"
+REF="${RGS_REF:-v1.0.0-rc4}"
 DIR="${RGS_DIR:-/opt/rgs-api}"
 SVC_USER="${RGS_USER:-rgsapi}"
 PORT_DEFAULT="${RGS_PORT:-8000}"

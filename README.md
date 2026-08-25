@@ -9,14 +9,14 @@ This package provides a Python and command-line interface to fetch Rehabilitatio
 ### Installation
 
 ```sh
-pip install git+https://github.com/dabadav/rgs-interface@v1.0.0
+pip install git+https://github.com/dabadav/rgs-interface@v1.0.0-rc4
 ```
 
 This gives you the Python module and the `rgs-cli` command, talking to the RGS DB API.
 Direct database access (only where port 3306 is reachable) needs the `sql` extra:
 
 ```sh
-pip install "rgs-interface[sql] @ git+https://github.com/dabadav/rgs-interface@v1.0.0"
+pip install "rgs-interface[sql] @ git+https://github.com/dabadav/rgs-interface@v1.0.0-rc4"
 ```
 
 Then store your API url and token once: `rgs-cli credentials set`.

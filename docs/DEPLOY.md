@@ -18,7 +18,7 @@ FLUSH PRIVILEGES;
 ## 2. Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0-rc4/deploy/install.sh | sudo sh
 ```
 
 Before changing anything the script checks prerequisites, takes a checksum snapshot of the
@@ -33,13 +33,13 @@ It prints the tokens once; hand each to its client.
 To see the checks and the plan without changing anything:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo RGS_DRY_RUN=1 sh
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0-rc4/deploy/install.sh | sudo RGS_DRY_RUN=1 sh
 ```
 
 To remove everything it created (service, `/opt/rgs-api`, the `rgsapi` user; nothing else):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo sh -s uninstall
+curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0-rc4/deploy/install.sh | sudo sh -s uninstall
 ```
 
 It writes only under `/opt/rgs-api`, plus `/usr/local/bin/uv`, the `rgsapi` user and the
@@ -59,7 +59,7 @@ API_TOKENS=<token1>:supervisor:r,<token2>:alert:r,<token3>:aicdss:rw
 API_VALIDATE=1
 ```
 
-Variables: `RGS_REF` (version tag, default `v1.0.0`), `RGS_DIR` (`/opt/rgs-api`),
+Variables: `RGS_REF` (version tag, default `v1.0.0-rc4`), `RGS_DIR` (`/opt/rgs-api`),
 `RGS_USER` (`rgsapi`), `RGS_PORT` (`8000`), `RGS_YES=1` (skip the prompt). If nginx will
 serve the API under a path, add `ROOT_PATH=/rgs-api` to `.env` and `systemctl restart rgs-api`.
 
