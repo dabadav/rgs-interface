@@ -18,14 +18,21 @@ FLUSH PRIVILEGES;
 ## 2. Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh | sudo sh
+curl -fsSLO https://raw.githubusercontent.com/dabadav/rgs-interface/v1.0.0/deploy/install.sh
+less install.sh          # read it first
+sudo sh install.sh
 ```
 
-What it does, in order: installs `uv` if missing, creates the `rgsapi` system user, installs
-`rgs-interface[server]` into `/opt/rgs-api/.venv`, asks for the MySQL password and writes
-`/opt/rgs-api/.env` (mode 600) with one fresh token per client, installs and starts the
-`rgs-api` systemd service, and checks `/v1/health`. It prints the tokens once; hand each to
-its client.
+What it does, in order: installs `uv` if missing (binary only, no shell changes), creates
+the `rgsapi` system user, installs `rgs-interface[server]` into `/opt/rgs-api/.venv`, asks
+for the MySQL password and writes `/opt/rgs-api/.env` (mode 600) with one fresh token per
+client, installs and starts the `rgs-api` systemd service, and checks `/v1/health`. It
+prints the tokens once; hand each to its client.
+
+It writes only under `/opt/rgs-api`, plus `/usr/local/bin/uv`, the `rgsapi` user and the
+systemd unit. It never overwrites an existing `.env`, an unrelated unit, or a directory it
+did not create, and it does not read or write anything under `/root`, `/home` or any
+existing Python environment. If a test machine is available, run it there first.
 
 The resulting `.env`:
 
@@ -40,7 +47,7 @@ API_VALIDATE=1
 ```
 
 Variables: `RGS_REF` (version tag, default `v1.0.0`), `RGS_DIR` (`/opt/rgs-api`),
-`RGS_USER` (`rgsapi`). If nginx will serve the API under a path, add `ROOT_PATH=/rgs-api`
+`RGS_USER` (`rgsapi`), `RGS_PORT` (`8000`). If nginx will serve the API under a path, add `ROOT_PATH=/rgs-api`
 to `.env` and `systemctl restart rgs-api`.
 
 ## 3. Tokens
@@ -121,7 +128,8 @@ location /rgs-api/ {
 Same one-liner with the new tag; `.env` is kept.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dabadav/rgs-interface/v1.1.0/deploy/install.sh | sudo RGS_REF=v1.1.0 sh
+curl -fsSLO https://raw.githubusercontent.com/dabadav/rgs-interface/v1.1.0/deploy/install.sh
+sudo RGS_REF=v1.1.0 sh install.sh
 ```
 
 Rollback: same with the previous tag.
