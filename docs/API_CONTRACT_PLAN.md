@@ -437,7 +437,7 @@ no mocks.
 
 ## Migration steps
 
-1. Delete `data/preprocess.py`, dead `.sql`, `data/interface.py`. Move `schemas.py` up.
+1. Delete `data/preprocess.py`, dead `.sql`, `data/interface.py`; fold `data/schemas.py` into `models.py`.
 2. `models.py`, `registry.py` + `queries/*.sql` from `API_ENDPOINTS.md`.
 3. `sql.py` (lift `_fetch` + the two writes), `http.py`.
 4. `server.py`, `Dockerfile`, `docker-compose.yml`.
