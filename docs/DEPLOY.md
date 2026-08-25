@@ -1,7 +1,8 @@
 # Deploy the RGS DB API
 
-Runs on the database host as a normal system service. No Docker. Needs Python 3.12,
-`uv`, and the existing nginx.
+Runs on the database host as a normal system service. No Docker, no git checkout.
+Needs Python 3.12, `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`) and the
+existing nginx.
 
 ## 1. MySQL user
 
@@ -16,13 +17,12 @@ FLUSH PRIVILEGES;
 ## 2. Install
 
 ```sh
-git clone --branch v1.0.0 https://github.com/dabadav/rgs-interface /opt/rgs-interface
-cd /opt/rgs-interface
-uv venv --python 3.12 .venv && uv pip install ".[server]"
-cp .env.example .env && chmod 600 .env
+mkdir -p /opt/rgs-api && cd /opt/rgs-api
+uv venv --python 3.12 .venv
+uv pip install "rgs-interface[server] @ git+https://github.com/dabadav/rgs-interface@v1.0.0"
 ```
 
-Edit `.env`:
+Create `/opt/rgs-api/.env` (`chmod 600`):
 
 ```
 PORT=8000
@@ -31,6 +31,7 @@ DB_USER=api_user
 DB_PASS=<password>
 DB_NAME=global_prod
 API_TOKENS=<token1>:supervisor:r,<token2>:alert:r,<token3>:aicdss:rw
+# ROOT_PATH=/rgs-api      only if nginx serves the API under a path
 ```
 
 ## 3. Tokens
@@ -49,41 +50,71 @@ Give each client its own token so one can be revoked without touching the others
 revoke or rotate: edit `API_TOKENS`, `systemctl restart rgs-api`, update the client.
 The tokens live only in `.env` on this server and in each client's secret store.
 
-## 4. Check before exposing
+## 4. Service
 
-```sh
-RGS_TEST_DB_URL="mysql+pymysql://api_user:<password>@127.0.0.1/global_prod" .venv/bin/python -m pytest -q
+`/etc/systemd/system/rgs-api.service` (set `User=` to the account that owns `/opt/rgs-api`,
+same as your other services):
+
+```ini
+[Unit]
+Description=RGS DB API
+After=network.target mysql.service
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/rgs-api
+EnvironmentFile=/opt/rgs-api/.env
+ExecStart=/opt/rgs-api/.venv/bin/uvicorn rgs_interface.server:app --host 127.0.0.1 --port ${PORT}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-Runs every query directly and through the API and checks the columns and types. If
-something fails it names the query; fix before continuing.
-
-## 5. Service
-
-Set `User=` in `deploy/rgs-api.service` to the account that owns `/opt/rgs-interface`
-(same as your other services), then:
-
 ```sh
-sudo cp deploy/rgs-api.service /etc/systemd/system/
 sudo systemctl enable --now rgs-api
-curl -H "Authorization: Bearer <tok1>" http://127.0.0.1:8000/v1/health
+curl -H "Authorization: Bearer <token1>" http://127.0.0.1:8000/v1/health
 ```
 
-## 6. nginx
+## 5. nginx
 
-Either a subdomain or a path under the existing site. See `deploy/nginx.conf`. For a
-path, also set `ROOT_PATH=/rgs-api` in `.env` and restart the service. TLS with
-`certbot --nginx` as for the other sites.
+Either a subdomain or a path under the existing site. TLS with `certbot --nginx` as for
+the other sites.
+
+Subdomain:
+
+```nginx
+server {
+    listen 80;
+    server_name api.rgs.eodyne.com;
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_read_timeout 120s;
+    }
+}
+```
+
+Path under the existing site (also set `ROOT_PATH=/rgs-api` in `.env` and restart):
+
+```nginx
+location /rgs-api/ {
+    proxy_pass http://127.0.0.1:8000/;
+    proxy_set_header Host $host;
+    proxy_read_timeout 120s;
+}
+```
 
 ## Update
 
 ```sh
-cd /opt/rgs-interface && git fetch --tags && git checkout v1.1.0
-uv pip install ".[server]"
+cd /opt/rgs-api
+uv pip install "rgs-interface[server] @ git+https://github.com/dabadav/rgs-interface@v1.1.0"
 sudo systemctl restart rgs-api
 ```
 
-Rollback: check out the previous tag and repeat.
+Rollback: same command with the previous tag.
 
 ## Operate
 
@@ -92,3 +123,14 @@ Rollback: check out the previous tag and repeat.
   data no longer matches the contract.
 - Hand each client its URL and token. Supervisor: `RGS_API_URL`, `RGS_API_TOKEN`.
   Alert: `DB_API_URL`, `DB_API_TOKEN`. People using `rgs-cli`: `rgs-cli credentials set`.
+
+## Verifying against the real data (developers)
+
+Before the first deploy, from any machine with SSH to the server:
+
+```sh
+ssh -L 3306:127.0.0.1:3306 user@server        # in one terminal
+RGS_TEST_DB_URL="mysql+pymysql://api_user:<password>@127.0.0.1/global_prod" pytest tests/test_contract_db.py
+```
+
+Runs every query directly and through the API and checks columns and types.
