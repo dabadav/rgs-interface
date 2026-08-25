@@ -18,10 +18,7 @@ FLUSH PRIVILEGES;
 ## 2. Install
 
 ```sh
-mkdir -p /opt/rgs-api && cd /opt/rgs-api
-uv venv --python 3.12 .venv
-uv pip install "rgs-interface[server] @ git+https://github.com/dabadav/rgs-interface@v1.0.0"
-.venv/bin/rgs-cli server init
+mkdir -p /opt/rgs-api && cd /opt/rgs-api && uv venv --python 3.12 .venv && uv pip install "rgs-interface[server] @ git+https://github.com/dabadav/rgs-interface@v1.0.0" && .venv/bin/rgs-cli server init
 ```
 
 `server init` asks for the MySQL password, generates one token per client, and writes
