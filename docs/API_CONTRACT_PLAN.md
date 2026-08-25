@@ -358,12 +358,11 @@ import io, os
 import pandas as pd
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import TypeAdapter, ValidationError
-from rgs_interface.db import get_db_engine
 from rgs_interface.registry import QUERIES
 from rgs_interface.sql import SqlBackend
 
 app = FastAPI(title="RGS DB API", version="1")
-db = SqlBackend(get_db_engine())
+db = SqlBackend.from_config(read_only=False)
 TOKENS = dict(t.split(":") for t in os.environ["API_TOKENS"].split(","))   # "token:consumer,..."
 VALIDATE = os.environ.get("API_VALIDATE", "1") == "1"
 
