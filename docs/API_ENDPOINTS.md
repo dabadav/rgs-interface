@@ -2,18 +2,24 @@
 
 Compiled 2026-08-25 from every SQL statement issued by `cdss-supervisor@develop`
 (dashboard, replay, backtest), `cdss-alert`, `ai-cdss` and `rgs_interface` itself.
-31 distinct statements collapse into the 11 read endpoints below. Each entry is one
-registry item in `rgs_interface.queries.registry` and one route in `rgs-db-api`.
+31 distinct statements collapse into the 13 registry entries (12 routes + health) below. Each entry is one
+registry item in `rgs_interface.registry` and one route in `rgs_interface.server`.
 
 Conventions
 
-- Base path `/v1`. All routes `GET`, bearer auth, JSON envelope
-  `{"rows": [...], "count": n}`; errors `{"error": str, "hint": str}` with 400/401/404/500.
+- Every route is `GET /v1/<registry name>` with query params — no path params.
+- Bearer auth. `Accept: application/vnd.apache.parquet` → parquet (Python clients);
+  otherwise JSON `{"rows": [...], "count": n}`. Errors: FastAPI default `{"detail": ...}`
+  with 401/422/500.
 - Column names are **verbatim** from today's SQL so client edits are mechanical.
 - List params (`patient_ids`) are repeated query params, cap 500, bound with
-  `bindparam(..., expanding=True)`.
-- Dates serialise as ISO strings with no timezone shift (alert relies on `dateStrings: true`).
-- `rgs_mode` ∈ {`plus`, `app`} selects `*_plus` / `*_app` tables where the SQL is templated.
+  `bindparam(..., expanding=True)`. Optional filters use `(:p IS NULL OR col = :p)`.
+- Dates in JSON are ISO strings, no timezone shift (alert relies on `dateStrings: true`).
+- `rgs_mode` ∈ {`plus`, `app`} is substituted into the SQL text; everything else is bound.
+- No `count` / `distinct` / `format` flags: clients do `len(df)`, `.drop_duplicates()`,
+  and pick the format via `Accept`.
+
+Route names below use the registry key (`/v1/staging_latest`, not `/patients/{id}/staging/latest`).
 
 ---
 
@@ -36,10 +42,9 @@ their filters, all off by default so the default shape equals the supervisor's.
 | `arm` | str | — | `pad.aisn_group = :arm` (backtest uses `RGS+AI`) |
 | `exclude_control` | bool | false | `pad.aisn_group <> 'Control'` (alert) |
 | `active` | bool | false | `trial_start <= CURDATE() <= trial_end` (alert `HAVING trial_active = 1`) |
-| `with_sessions` | bool | false | adds `last_session_at`, `days_without_session` (alert; costs a `session_plus` join) |
 
 Columns: `patient_id`, `patient_name`, `hospital_name`, `trial_arm`, `trial_start`,
-`trial_end`, `trial_active`, and with `with_sessions`: `last_session_at`, `days_without_session`.
+`trial_end`, `trial_active`, `last_session_at`, `days_without_session` (session join always on; ~30 patients).
 
 > Supervisor today receives `name`, `aisn_group`, `patient_user`, `patient_id`,
 > `start_date`, `end_date` and re-aliases them itself (`HOSPITAL_NAME`, `AISN_GROUP`,
@@ -57,17 +62,15 @@ SELECT
   pad.aisn_group                              AS trial_arm,
   MIN(ct.start_date)                          AS trial_start,
   MAX(ct.end_date)                            AS trial_end,
-  (MIN(ct.start_date) <= CURDATE() AND MAX(ct.end_date) >= CURDATE()) AS trial_active
-  -- with_sessions adds:
-  -- , MAX(s.STARTING_DATE)                        AS last_session_at
-  -- , DATEDIFF(CURDATE(), MAX(s.STARTING_DATE))   AS days_without_session
+  (MIN(ct.start_date) <= CURDATE() AND MAX(ct.end_date) >= CURDATE()) AS trial_active,
+  MAX(s.STARTING_DATE)                        AS last_session_at,
+  DATEDIFF(CURDATE(), MAX(s.STARTING_DATE))   AS days_without_session
 FROM patient_aisn_data       AS pad
 JOIN patient                 AS p   ON pad.patient_id   = p.patient_id
 JOIN hospital                AS h   ON p.hospital_id    = h.hospital_id
 JOIN clinical_trials         AS ct  ON pad.patient_id   = ct.patient_id
--- with_sessions adds:
--- LEFT JOIN prescription_plus  AS pp  ON pp.PATIENT_ID     = pad.patient_id
--- LEFT JOIN session_plus       AS s   ON s.PRESCRIPTION_ID = pp.PRESCRIPTION_ID AND s.STATUS = 'CLOSED'
+LEFT JOIN prescription_plus  AS pp  ON pp.PATIENT_ID     = pad.patient_id
+LEFT JOIN session_plus       AS s   ON s.PRESCRIPTION_ID = pp.PRESCRIPTION_ID AND s.STATUS = 'CLOSED'
 WHERE h.name <> 'AISN Hospital test'
   AND p.patient_user LIKE 'AI%'
   AND p.patient_user NOT LIKE '%deleted%'
@@ -81,7 +84,7 @@ ORDER BY pad.patient_id;
 
 Replaces: alert `queries/cohort.sql`; supervisor `SQL_COHORT`; replay `SQL_COHORT_ROW`;
 backtest `SQL_AISN_COHORT`.
-Consumers: alert (`exclude_control=1&active=1&with_sessions=1`), supervisor, replay, backtest.
+Consumers: alert (`exclude_control=1&active=1`), supervisor, replay, backtest.
 
 ---
 
@@ -145,34 +148,32 @@ ORDER BY PATIENT_ID, WEEKS_SINCE_START, RECOMMENDATION_ID, PROTOCOL_ID;
 Replaces: alert `protocol_staging.sql`, `staging_pending.sql`; supervisor `SQL_STAGING`,
 `SQL_STAGING_BULK`, inline week rows (`cur_df`), inline prev-week rows (`prev_df`);
 replay `SQL_STAGING_WEEK`, `SQL_STAGING_PRIOR_WEEK_ACCEPTED`; ai_cdss `_already_prescribed`
-(client counts rows).
+(client does `len(df)`).
 Consumers: alert, supervisor, replay, ai_cdss.
 
 ---
 
-## 5. `GET /v1/patients/{patient_id}/staging/latest`
+## 5. `GET /v1/staging_latest`
 
-Two small aggregates the dashboard runs before picking a week.
+Two small aggregates the dashboard runs before picking a week, as one statement.
 
 | param | type | effect |
 |---|---|---|
-| `week` | int | if given, also return the latest `RECOMMENDATION_ID` for that week |
+| `patient_id` | int (required) | |
+| `week` | int | if given, `latest_recommendation_id` is for that week, else null |
 
-Response: `{"max_week": int|null, "latest_recommendation_id": str|null}`.
+Columns: `max_week`, `latest_recommendation_id` (one row).
 
 ```sql
--- max_week
-SELECT MAX(WEEKS_SINCE_START) AS w
+SELECT
+    MAX(WEEKS_SINCE_START) AS max_week,
+    (SELECT RECOMMENDATION_ID
+       FROM prescription_staging
+      WHERE PATIENT_ID = :patient_id AND WEEKS_SINCE_START = :week
+      ORDER BY PRESCRIPTION_STAGING_ID DESC
+      LIMIT 1) AS latest_recommendation_id
 FROM prescription_staging
 WHERE PATIENT_ID = :patient_id;
-
--- latest_recommendation_id (only when :week given)
-SELECT RECOMMENDATION_ID, MAX(PRESCRIPTION_STAGING_ID) AS sid
-FROM prescription_staging
-WHERE PATIENT_ID = :patient_id AND WEEKS_SINCE_START = :week
-GROUP BY RECOMMENDATION_ID
-ORDER BY sid DESC
-LIMIT 1;
 ```
 
 Replaces: supervisor inline `latest` and `rid_df`. Consumers: supervisor.
@@ -187,8 +188,6 @@ Replaces: supervisor inline `latest` and `rid_df`. Consumers: supervisor.
 |---|---|---|
 | `patient_ids` | int[] (required) | `PATIENT_ID IN :patient_ids` |
 | `active_from`, `active_to` | datetime | window overlap: `STARTING_DATE < :active_to AND ENDING_DATE > :active_from` (backtest `SQL_PRIOR_PLUS`, supervisor weekly count) |
-| `distinct_protocols` | bool | return only distinct `PATIENT_ID`, `PROTOCOL_ID` |
-| `count` | bool | return `{"count": n}` instead of rows |
 
 Columns: `PRESCRIPTION_ID`, `PATIENT_ID`, `PROTOCOL_ID`, `STARTING_DATE`, `ENDING_DATE`,
 `WEEKDAY`, `SESSION_DURATION`.
@@ -210,14 +209,14 @@ ORDER BY PATIENT_ID, STARTING_DATE, PROTOCOL_ID;
 ```
 
 Replaces: alert `protocol_prescriptions.sql`; supervisor `SQL_PRESCRIPTION`,
-`SQL_PRESCRIPTION_BULK`, inline weekly `COUNT(*)`; backtest `SQL_PRIOR_PLUS`.
+`SQL_PRESCRIPTION_BULK`, inline weekly `COUNT(*)` (client `len(df)`); backtest `SQL_PRIOR_PLUS` (client `drop_duplicates`).
 Consumers: alert, supervisor, backtest.
 
 ---
 
-## 7. `GET /v1/patients/{patient_id}/adherence`
+## 7. `GET /v1/adherence`
 
-Per-prescription adherence rows (prescription × closed/aborted session × recorded duration).
+`patient_id` (required). Per-prescription adherence rows (prescription × closed/aborted session × recorded duration).
 
 Columns: `PRESCRIPTION_ID`, `PROTOCOL_ID`, `STARTING_DATE`, `WEEKDAY`, `PRESCRIBED_DURATION`,
 `SESSION_ID`, `SESSION_DATE`, `SESSION_STATUS`, `RECORDED_DURATION`.
@@ -254,16 +253,15 @@ Replaces: supervisor `SQL_ADHERENCE`. Consumers: supervisor.
 
 ## 8. `GET /v1/sessions`
 
-Session counts / rows per patient, optionally windowed. Today only the count is used.
+Session rows per patient, optionally windowed. Today only `len(df)` is used.
 
 | param | type | effect |
 |---|---|---|
 | `patient_id` | int (required) | via `prescription_plus.PATIENT_ID` |
 | `status` | str | `s.STATUS = :status` (supervisor uses `CLOSED`) |
-| `from`, `to` | datetime | `s.STARTING_DATE >= :from AND s.STARTING_DATE < :to` |
-| `count` | bool | return `{"count": n}` |
+| `since`, `until` | datetime | `s.STARTING_DATE >= :since AND s.STARTING_DATE < :until` |
 
-Columns (when not `count`): `SESSION_ID`, `PRESCRIPTION_ID`, `PROTOCOL_ID`, `STARTING_DATE`,
+Columns: `SESSION_ID`, `PRESCRIPTION_ID`, `PROTOCOL_ID`, `STARTING_DATE`,
 `ENDING_DATE`, `STATUS`.
 
 ```sql
@@ -272,8 +270,8 @@ FROM session_plus s
 JOIN prescription_plus p ON s.PRESCRIPTION_ID = p.PRESCRIPTION_ID
 WHERE p.PATIENT_ID = :patient_id
   AND (:status IS NULL OR s.STATUS = :status)
-  AND (:from IS NULL OR s.STARTING_DATE >= :from)
-  AND (:to   IS NULL OR s.STARTING_DATE <  :to)
+  AND (:since IS NULL OR s.STARTING_DATE >= :since)
+  AND (:until IS NULL OR s.STARTING_DATE <  :until)
 ORDER BY s.STARTING_DATE;
 ```
 
@@ -281,7 +279,7 @@ Replaces: supervisor inline weekly closed-session `COUNT(*)`. Consumers: supervi
 
 ---
 
-## 9. `GET /v1/recsys-metrics`
+## 9. `GET /v1/recsys_metrics`
 
 Long-format scoring metrics written by ai-cdss per recommendation run.
 
@@ -314,7 +312,7 @@ Consumers: supervisor, replay.
 
 ---
 
-## 10. `GET /v1/clinical-trials`
+## 10. `GET /v1/clinical_trials`
 
 Two uses: clinical scores per patient, and the **production CDSS trigger** query
 (`fetch_patients_by_study`) — patients whose weekly recommendation is due today.
@@ -348,28 +346,29 @@ Consumers: supervisor, ai_cdss.
 
 ---
 
-## 11. `GET /v1/rgs-data`
+## 11. `GET /v1/rgs_data`, `GET /v1/dm_data`, `GET /v1/pe_data`
 
-Heavy per-session join used by ai-cdss feature building. Parquet by default when more
-than one patient; JSON allowed for ≤ 1 patient.
+Heavy per-session joins used by ai-cdss feature building. Three registry entries sharing
+one param model; request with `Accept: application/vnd.apache.parquet`.
 
 | param | type | effect |
 |---|---|---|
 | `patient_ids` | int[] (required) | |
 | `rgs_mode` | `plus`\|`app` | table suffix, default `plus` |
-| `kind` | `full`\|`dm`\|`pe`\|`timeseries` | which `.sql`: `query.sql`, `query_dm.sql`, `query_pe.sql`, dm⋈pe |
-| `format` | `json`\|`parquet` | default `parquet`; response `application/vnd.apache.parquet` |
 
-`kind=full` columns: `PATIENT_ID`, `PRESCRIPTION_ID`, `SESSION_ID`, `PROTOCOL_ID`,
+`rgs_data` columns: `PATIENT_ID`, `PRESCRIPTION_ID`, `SESSION_ID`, `PROTOCOL_ID`,
 `PRESCRIPTION_STARTING_DATE`, `PRESCRIPTION_ENDING_DATE`, `SESSION_DATE`, `STATUS`,
 `WEEKDAY_INDEX`, `REAL_SESSION_DURATION`, `PRESCRIBED_SESSION_DURATION`, `SESSION_DURATION`,
 `ADHERENCE`, `DM_VALUE`.
 
-`kind=dm` columns: `SESSION_ID`, `PATIENT_ID`, `PROTOCOL_ID`, `GAME_MODE`,
+`dm_data` columns: `SESSION_ID`, `PATIENT_ID`, `PROTOCOL_ID`, `GAME_MODE`,
 `SECONDS_FROM_START`, `DM_KEY`, `DM_VALUE`.
 
-SQL: existing `rgs_interface/sql/query.sql`, `query_dm.sql`, `query_pe.sql` verbatim
-(moved to `queries/rgs_data_full.sql`, `rgs_data_dm.sql`, `rgs_data_pe.sql`).
+`pe_data` columns: from `query_pe.sql`, fixed at implementation time.
+
+SQL: existing `sql/query.sql`, `query_dm.sql`, `query_pe.sql` verbatim, renamed to
+`queries/rgs_data.sql`, `dm_data.sql`, `pe_data.sql`. `fetch_timeseries_data` (dm ⋈ pe) is a
+client-side merge, not an endpoint.
 
 Replaces: `rgs_interface.fetch_rgs_data`, `fetch_dm_data`, `fetch_pe_data`,
 `fetch_timeseries_data`. Consumers: ai_cdss via supervisor replay `--warmup`, ai-cdss prod.
@@ -409,7 +408,7 @@ Replaces: `rgs_interface.fetch_rgs_data`, `fetch_dm_data`, `fetch_pe_data`,
 
 | today (`queries.json`) | endpoint | params |
 |---|---|---|
-| `cohort` | `GET /v1/cohort` | `exclude_control=1&active=1&with_sessions=1` |
+| `cohort` | `GET /v1/cohort` | `exclude_control=1&active=1` |
 | `protocol_staging` | `GET /v1/staging` | `patient_ids=…` |
 | `staging_pending` | `GET /v1/staging` | `patient_ids=…&status=Pending` |
 | `protocol_prescriptions` | `GET /v1/prescriptions` | `patient_ids=…` |
@@ -428,14 +427,14 @@ Handlers unchanged: `protocolViolation.js`, `pendingPrescriptions.js` and the de
 | `SQL_STAGING_BULK` | `GET /v1/staging?patient_ids=…` |
 | inline `cur_df` (pid, week, rid) | `GET /v1/staging?patient_ids=pid&week=w&recommendation_id=rid` |
 | inline `prev_df` (pid, week-1) | `GET /v1/staging?patient_ids=pid&week=w-1` |
-| inline `MAX(WEEKS_SINCE_START)` + `rid_df` | `GET /v1/patients/{pid}/staging/latest?week=w` |
+| inline `MAX(WEEKS_SINCE_START)` + `rid_df` | `GET /v1/staging_latest?patient_id=pid&week=w` |
 | `SQL_PRESCRIPTION` / `fetch_prescription(pid)` | `GET /v1/prescriptions?patient_ids=pid` |
 | `SQL_PRESCRIPTION_BULK` | `GET /v1/prescriptions?patient_ids=…` |
-| inline weekly `COUNT(*) prescription_plus` | `GET /v1/prescriptions?patient_ids=pid&active_from=…&active_to=…&count=1` |
-| inline weekly `COUNT(*) session_plus CLOSED` | `GET /v1/sessions?patient_id=pid&status=CLOSED&from=…&to=…&count=1` |
-| `SQL_ADHERENCE` / `fetch_adherence(pid)` | `GET /v1/patients/{pid}/adherence` |
-| inline `recsys_metrics` (pid, rid) | `GET /v1/recsys-metrics?patient_id=pid&recommendation_ids=rid` |
-| inline `CLINICAL_SCORES` | `GET /v1/clinical-trials?patient_ids=…&with_scores=1` |
+| inline weekly `COUNT(*) prescription_plus` | `GET /v1/prescriptions?patient_ids=pid&active_from=…&active_to=…` → `len(df)` |
+| inline weekly `COUNT(*) session_plus CLOSED` | `GET /v1/sessions?patient_id=pid&status=CLOSED&since=…&until=…` → `len(df)` |
+| `SQL_ADHERENCE` / `fetch_adherence(pid)` | `GET /v1/adherence?patient_id=pid` |
+| inline `recsys_metrics` (pid, rid) | `GET /v1/recsys_metrics?patient_id=pid&recommendation_ids=rid` |
+| inline `CLINICAL_SCORES` | `GET /v1/clinical_trials?patient_ids=…&with_scores=1` |
 | `SELECT 1` `/healthz` | `GET /v1/health` |
 
 ### cdss-supervisor replay + backtest (6 statements → 4 endpoints)
@@ -445,15 +444,15 @@ Handlers unchanged: `protocolViolation.js`, `pendingPrescriptions.js` and the de
 | `SQL_COHORT_ROW` | `GET /v1/cohort?patient_id=pid` |
 | `SQL_STAGING_WEEK` | `GET /v1/staging?patient_ids=pid&week=w` |
 | `SQL_STAGING_PRIOR_WEEK_ACCEPTED` | `GET /v1/staging?patient_ids=pid&week=w-1` (client does `DISTINCT PROTOCOL_ID, RECOMMENDATION_ID, STATUS`) |
-| `SQL_HISTORICAL_METRICS` | `GET /v1/recsys-metrics?patient_id=pid&recommendation_ids=…` |
+| `SQL_HISTORICAL_METRICS` | `GET /v1/recsys_metrics?patient_id=pid&recommendation_ids=…` |
 | `SQL_AISN_COHORT` | `GET /v1/cohort?arm=RGS%2BAI` |
-| `SQL_PRIOR_PLUS` | `GET /v1/prescriptions?patient_ids=pid&active_from=…&active_to=…&distinct_protocols=1` |
+| `SQL_PRIOR_PLUS` | `GET /v1/prescriptions?patient_ids=pid&active_from=…&active_to=…` → `drop_duplicates` |
 
 ### ai-cdss via replay `--warmup` (4 → 3 endpoints)
 
 | today (`rgs_interface`) | endpoint |
 |---|---|
-| `fetch_rgs_data` | `GET /v1/rgs-data?kind=full&rgs_mode=plus&format=parquet` |
-| `fetch_dm_data` | `GET /v1/rgs-data?kind=dm` |
-| `fetch_patients_by_study` | `GET /v1/clinical-trials?study_id=…&due_today=1` |
-| `_already_prescribed` | `GET /v1/staging?patient_ids=pid&week_start=YYYY-MM-DD&count=1` |
+| `fetch_rgs_data` | `GET /v1/rgs_data?rgs_mode=plus` (parquet) |
+| `fetch_dm_data` | `GET /v1/dm_data` |
+| `fetch_patients_by_study` | `GET /v1/clinical_trials?study_id=…&due_today=1` |
+| `_already_prescribed` | `GET /v1/staging?patient_ids=pid&week_start=YYYY-MM-DD` → `len(df) > 0` |
