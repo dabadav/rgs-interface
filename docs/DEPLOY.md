@@ -63,6 +63,7 @@ Print the unit for this directory and install it (`--user` = the account that ow
 
 ```sh
 .venv/bin/rgs-cli server init --unit --user www-data | sudo tee /etc/systemd/system/rgs-api.service
+sudo chown -R www-data /opt/rgs-api        # the service user must read .env and the venv
 ```
 
 It looks like this:
@@ -70,7 +71,8 @@ It looks like this:
 ```ini
 [Unit]
 Description=RGS DB API
-After=network.target mysql.service
+Wants=network-online.target
+After=network-online.target mysql.service mariadb.service
 
 [Service]
 User=www-data

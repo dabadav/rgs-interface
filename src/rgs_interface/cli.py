@@ -121,7 +121,8 @@ def list_patients(
 UNIT_TEMPLATE = """\
 [Unit]
 Description=RGS DB API
-After=network.target mysql.service
+Wants=network-online.target
+After=network-online.target mysql.service mariadb.service
 
 [Service]
 User={user}
