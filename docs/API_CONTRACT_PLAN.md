@@ -17,22 +17,25 @@ Endpoint list and SQL: [`API_ENDPOINTS.md`](API_ENDPOINTS.md).
 
 Three ideas, nothing else:
 
-1. **Registry** — `name → (param model, expected columns)`; SQL lives in `queries/<name>.sql`.
+1. **Registry** — `name → (param model, row model)`; SQL lives in `queries/<name>.sql`.
+   The row model is the contract: field names are the columns, field types are validated
+   on every server response.
 2. **Two backends with one method** — `SqlBackend.fetch(name, **params)` runs the SQL;
    `HttpBackend.fetch(name, **params)` calls `GET /v1/<name>`; both return a DataFrame.
 3. **Server is a loop** — for each registry entry, mount `GET /v1/<name>`, validate params
-   with the entry's model, run `SqlBackend.fetch`, return parquet (Python clients) or JSON
-   (JS clients) by `Accept` header.
+   with the param model, run `SqlBackend.fetch`, **validate rows with the row model**,
+   return parquet (Python clients) or JSON (JS clients) by `Accept` header.
 
 Parity is structural: server and client import the same registry from the same package
-version. Dtypes travel in parquet, so no row models are needed.
+version. Validation happens once, at the source; clients trust the server.
 
 ## Layout
 
 ```
 src/rgs_interface/
 ├── __init__.py        from .sql import SqlBackend ; from .http import HttpBackend
-├── registry.py        Query dataclass, 11 param models, QUERIES dict           ~150 lines
+├── models.py          12 pydantic row models (the contract)                     ~150 lines
+├── registry.py        Query dataclass, 11 param models, QUERIES dict           ~130
 ├── queries/
 │   ├── cohort.sql  protocols.sql  staging.sql  staging_latest.sql
 │   ├── prescriptions.sql  adherence.sql  sessions.sql  recsys_metrics.sql
@@ -42,7 +45,7 @@ src/rgs_interface/
 │   └── pe_data.sql    (was sql/query_pe.sql)
 ├── sql.py             SqlBackend: fetch + add_prescription_staging_entry + add_recsys_metric_entry   ~90
 ├── http.py            HttpBackend: fetch                                                             ~40
-├── server.py          FastAPI app  (extra: [server])                                                 ~80
+├── server.py          FastAPI app, validates rows before responding (extra: [server])                ~90
 ├── db.py              engine factory                          (existing, unchanged)
 ├── config.py          credentials                             (existing, unchanged)
 ├── schemas.py         PrescriptionStagingRow, RecsysMetricsRow (existing, moved up from data/)
@@ -52,7 +55,7 @@ Dockerfile             python:3.12-slim, pip install ".[sql,server]", uvicorn rg
 docker-compose.yml     network_mode: host, env_file .env
 tests/
 ├── conftest.py        MariaDB via testcontainers, schema + 5-patient seed, FastAPI TestClient
-└── test_contract.py   for name in QUERIES: sql == http, columns == registry
+└── test_contract.py   for name in QUERIES: sql == http, every row validates against q.row
 ```
 
 Deleted: `data/interface.py`, `data/preprocess.py`, `data/__init__.py`, `sql/query_old.sql`,
@@ -82,6 +85,131 @@ cli    = ["typer>=0.12"]
 
 ## Code
 
+### `models.py`
+
+One pydantic model per query result row. Field names are the SQL column names verbatim;
+types are what the DB must deliver. `extra="forbid"` so an unexpected column fails loudly.
+
+```python
+from datetime import date, datetime
+from decimal import Decimal
+from pydantic import BaseModel, ConfigDict
+
+class Row(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+class CohortRow(Row):
+    patient_id: int
+    patient_name: str
+    hospital_name: str
+    trial_arm: str
+    trial_start: date
+    trial_end: date
+    trial_active: bool
+    last_session_at: datetime | None
+    days_without_session: int | None
+
+class ProtocolRow(Row):
+    PROTOCOL_ID: int
+    PROTOCOL_NAME: str
+    PROTOCOL_TYPE_ID: int
+    PROTOCOL_TYPE_NAME: str
+
+class StagingRow(Row):
+    PRESCRIPTION_STAGING_ID: int
+    PATIENT_ID: int
+    PROTOCOL_ID: int
+    STARTING_DATE: datetime
+    ENDING_DATE: datetime
+    WEEKDAY: str
+    SESSION_DURATION: int
+    RECOMMENDATION_ID: str | None
+    WEEKS_SINCE_START: int
+    STATUS: str
+
+class StagingLatest(Row):
+    max_week: int | None
+    latest_recommendation_id: str | None
+
+class PrescriptionRow(Row):
+    PRESCRIPTION_ID: int
+    PATIENT_ID: int
+    PROTOCOL_ID: int
+    STARTING_DATE: datetime
+    ENDING_DATE: datetime
+    WEEKDAY: str
+    SESSION_DURATION: int
+
+class AdherenceRow(Row):
+    PRESCRIPTION_ID: int
+    PROTOCOL_ID: int
+    STARTING_DATE: datetime
+    WEEKDAY: str
+    PRESCRIBED_DURATION: int
+    SESSION_ID: int | None
+    SESSION_DATE: datetime | None
+    SESSION_STATUS: str | None
+    RECORDED_DURATION: float | None
+
+class SessionRow(Row):
+    SESSION_ID: int
+    PRESCRIPTION_ID: int
+    PROTOCOL_ID: int
+    STARTING_DATE: datetime
+    ENDING_DATE: datetime | None
+    STATUS: str
+
+class RecsysMetricRow(Row):
+    RECOMMENDATION_ID: str
+    PROTOCOL_ID: int
+    METRIC_KEY: str
+    METRIC_VALUE: Decimal
+    METRIC_DATE: datetime
+
+class ClinicalTrialRow(Row):
+    model_config = ConfigDict(extra="allow")   # SELECT * until DESCRIBE on the new host
+    PATIENT_ID: int
+    STUDY_ID: int
+    START_DATE: date
+    END_DATE: date
+    RECOMMEND: int
+    CLINICAL_SCORES: str | None
+
+class RgsDataRow(Row):
+    PATIENT_ID: int
+    PRESCRIPTION_ID: int
+    SESSION_ID: int | None
+    PROTOCOL_ID: int
+    PRESCRIPTION_STARTING_DATE: datetime
+    PRESCRIPTION_ENDING_DATE: datetime
+    SESSION_DATE: datetime | None
+    STATUS: str | None
+    WEEKDAY_INDEX: int | None
+    REAL_SESSION_DURATION: int | None
+    PRESCRIBED_SESSION_DURATION: int
+    SESSION_DURATION: int | None
+    ADHERENCE: float | None
+    DM_VALUE: float | None
+
+class DmRow(Row):
+    SESSION_ID: int
+    PATIENT_ID: int
+    PROTOCOL_ID: int
+    GAME_MODE: str
+    SECONDS_FROM_START: int
+    DM_KEY: str
+    DM_VALUE: float
+
+class PeRow(Row):
+    model_config = ConfigDict(extra="allow")   # from query_pe.sql at implementation time
+    SESSION_ID: int
+    PATIENT_ID: int
+    PROTOCOL_ID: int
+```
+
+Types are best guesses from today's usage; the parity test corrects them against real rows
+before `v1.0.0` is tagged.
+
 ### `registry.py`
 
 ```python
@@ -89,6 +217,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Literal
 from pydantic import BaseModel, conlist
+from rgs_interface import models as M
 
 PatientIds = conlist(int, min_length=1, max_length=500)
 
@@ -133,33 +262,25 @@ class RgsDataParams(BaseModel):
 @dataclass(frozen=True)
 class Query:
     params: type[BaseModel]
-    columns: tuple[str, ...]
+    row: type[BaseModel]
+
+    @property
+    def columns(self) -> tuple[str, ...]:
+        return tuple(self.row.model_fields)
 
 QUERIES: dict[str, Query] = {
-    "cohort":          Query(CohortParams, ("patient_id","patient_name","hospital_name","trial_arm",
-                                            "trial_start","trial_end","trial_active","last_session_at","days_without_session")),
-    "protocols":       Query(NoParams, ("PROTOCOL_ID","PROTOCOL_NAME","PROTOCOL_TYPE_ID","PROTOCOL_TYPE_NAME")),
-    "staging":         Query(StagingParams, ("PRESCRIPTION_STAGING_ID","PATIENT_ID","PROTOCOL_ID","STARTING_DATE",
-                                             "ENDING_DATE","WEEKDAY","SESSION_DURATION","RECOMMENDATION_ID",
-                                             "WEEKS_SINCE_START","STATUS")),
-    "staging_latest":  Query(StagingLatestParams, ("max_week","latest_recommendation_id")),
-    "prescriptions":   Query(PrescriptionParams, ("PRESCRIPTION_ID","PATIENT_ID","PROTOCOL_ID","STARTING_DATE",
-                                                  "ENDING_DATE","WEEKDAY","SESSION_DURATION")),
-    "adherence":       Query(PatientParams, ("PRESCRIPTION_ID","PROTOCOL_ID","STARTING_DATE","WEEKDAY",
-                                             "PRESCRIBED_DURATION","SESSION_ID","SESSION_DATE","SESSION_STATUS",
-                                             "RECORDED_DURATION")),
-    "sessions":        Query(SessionParams, ("SESSION_ID","PRESCRIPTION_ID","PROTOCOL_ID","STARTING_DATE",
-                                             "ENDING_DATE","STATUS")),
-    "recsys_metrics":  Query(RecsysMetricParams, ("RECOMMENDATION_ID","PROTOCOL_ID","METRIC_KEY","METRIC_VALUE",
-                                                  "METRIC_DATE")),
-    "clinical_trials": Query(ClinicalTrialParams, ()),      # SELECT *; columns fixed after DESCRIBE on new host
-    "rgs_data":        Query(RgsDataParams, ("PATIENT_ID","PRESCRIPTION_ID","SESSION_ID","PROTOCOL_ID",
-                                             "PRESCRIPTION_STARTING_DATE","PRESCRIPTION_ENDING_DATE","SESSION_DATE",
-                                             "STATUS","WEEKDAY_INDEX","REAL_SESSION_DURATION",
-                                             "PRESCRIBED_SESSION_DURATION","SESSION_DURATION","ADHERENCE","DM_VALUE")),
-    "dm_data":         Query(RgsDataParams, ("SESSION_ID","PATIENT_ID","PROTOCOL_ID","GAME_MODE",
-                                             "SECONDS_FROM_START","DM_KEY","DM_VALUE")),
-    "pe_data":         Query(RgsDataParams, ()),            # columns from query_pe.sql at implementation time
+    "cohort":          Query(CohortParams,        M.CohortRow),
+    "protocols":       Query(NoParams,            M.ProtocolRow),
+    "staging":         Query(StagingParams,       M.StagingRow),
+    "staging_latest":  Query(StagingLatestParams, M.StagingLatest),
+    "prescriptions":   Query(PrescriptionParams,  M.PrescriptionRow),
+    "adherence":       Query(PatientParams,       M.AdherenceRow),
+    "sessions":        Query(SessionParams,       M.SessionRow),
+    "recsys_metrics":  Query(RecsysMetricParams,  M.RecsysMetricRow),
+    "clinical_trials": Query(ClinicalTrialParams, M.ClinicalTrialRow),
+    "rgs_data":        Query(RgsDataParams,       M.RgsDataRow),
+    "dm_data":         Query(RgsDataParams,       M.DmRow),
+    "pe_data":         Query(RgsDataParams,       M.PeRow),
 }
 
 def sql_text(name: str) -> str:
@@ -233,6 +354,7 @@ Retries on 502/503/504 via `urllib3.Retry` on the session adapter — 5 lines, n
 import io, os
 import pandas as pd
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from pydantic import TypeAdapter, ValidationError
 from rgs_interface.db import get_db_engine
 from rgs_interface.registry import QUERIES
 from rgs_interface.sql import SqlBackend
@@ -240,6 +362,7 @@ from rgs_interface.sql import SqlBackend
 app = FastAPI(title="RGS DB API", version="1")
 db = SqlBackend(get_db_engine())
 TOKENS = dict(t.split(":") for t in os.environ["API_TOKENS"].split(","))   # "token:consumer,..."
+VALIDATE = os.environ.get("API_VALIDATE", "1") == "1"
 
 def auth(authorization: str = Header()):
     tok = authorization.removeprefix("Bearer ").strip()
@@ -255,6 +378,12 @@ def make_handler(name, q):
             raw[k] = v if len(v) > 1 or k.endswith("_ids") else v[0]
         params = q.params(**raw)                 # 422 on error via FastAPI
         df = db.fetch(name, **params.model_dump())
+        if VALIDATE:                             # API_VALIDATE=0 to skip; default on
+            try:
+                TypeAdapter(list[q.row]).validate_python(df.to_dict(orient="records"))
+            except ValidationError as e:
+                log.error("contract violation on %s: %s", name, e.errors()[:3])
+                raise HTTPException(500, f"{name}: response does not match {q.row.__name__}")
         if "parquet" in request.headers.get("accept", ""):
             buf = io.BytesIO(); df.to_parquet(buf, index=False)
             return Response(buf.getvalue(), media_type="application/vnd.apache.parquet")
@@ -262,7 +391,8 @@ def make_handler(name, q):
     return handler
 
 for name, q in QUERIES.items():
-    app.add_api_route(f"/v1/{name}", make_handler(name, q), methods=["GET"], name=name)
+    app.add_api_route(f"/v1/{name}", make_handler(name, q), methods=["GET"], name=name,
+                      response_model=list[q.row])   # typed rows in openapi.json
 
 @app.get("/v1/health")
 def health():
@@ -272,6 +402,10 @@ def health():
 
 JSON dates: pandas `Timestamp` → FastAPI's encoder emits ISO strings. cdss-alert already
 treats dates as strings (`dateStrings: true`), so nothing changes for it.
+
+Validation cost: pydantic v2 validates ~1M flat rows/s. `rgs_data` for the whole cohort is
+tens of thousands of rows → milliseconds. `API_VALIDATE=0` exists as an escape hatch, not
+a plan.
 
 ### `tests/test_contract.py`
 
@@ -289,17 +423,18 @@ def test_sql_http_parity(name, sql_backend, http_backend):
     a = sql_backend.fetch(name, **SAMPLE[name])
     b = http_backend.fetch(name, **SAMPLE[name])
     assert_frame_equal(a, b)
-    if QUERIES[name].columns:
-        assert tuple(a.columns) == QUERIES[name].columns
+    assert tuple(a.columns) == QUERIES[name].columns
+    TypeAdapter(list[QUERIES[name].row]).validate_python(a.to_dict(orient="records"))
 ```
 
 `http_backend` fixture points at `fastapi.testclient.TestClient(server.app)` through a
-tiny adapter, so the test exercises auth, param parsing and parquet with no mocks.
+tiny adapter, so the test exercises auth, param parsing, row validation and parquet with
+no mocks.
 
 ## Migration steps
 
 1. Delete `data/preprocess.py`, dead `.sql`, `data/interface.py`. Move `schemas.py` up.
-2. `registry.py` + `queries/*.sql` from `API_ENDPOINTS.md`.
+2. `models.py`, `registry.py` + `queries/*.sql` from `API_ENDPOINTS.md`.
 3. `sql.py` (lift `_fetch` + the two writes), `http.py`.
 4. `server.py`, `Dockerfile`, `docker-compose.yml`.
 5. `tests/` — fixture + parity test.
@@ -309,7 +444,7 @@ tiny adapter, so the test exercises auth, param parsing and parquet with no mock
 
 ## Versioning
 
-- `/v1` ⇔ major 1. A column added to a registry entry is minor; removed/renamed is major.
+- `/v1` ⇔ major 1. A field added to a row model is minor; removed/renamed/retyped is major.
 - Supervisor `cloudbuild.yaml` `_RGS_INTERFACE_REF` and the server image pin the same tag.
 - `ai-cdss` stays on `v0.4.1` until it opts in.
 
@@ -319,6 +454,6 @@ tiny adapter, so the test exercises auth, param parsing and parquet with no mock
 |---|---|
 | keep `rgs_mode=app` tables? | yes |
 | cohort column names: snake_case (alert) is canonical; supervisor renames on ingest | yes |
-| `clinical_trials` / `pe_data` column tuples | fill after `DESCRIBE` / first run on new host |
+| `ClinicalTrialRow` / `PeRow` exact fields | `extra="allow"` until `DESCRIBE` / first run on new host, then lock to `forbid` |
 | writes over HTTP | not in v1; `HttpBackend` has no write methods |
 | auth | `Authorization: Bearer`, one token per consumer, `API_TOKENS` env |

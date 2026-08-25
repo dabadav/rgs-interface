@@ -11,7 +11,9 @@ Conventions
 - Bearer auth. `Accept: application/vnd.apache.parquet` → parquet (Python clients);
   otherwise JSON `{"rows": [...], "count": n}`. Errors: FastAPI default `{"detail": ...}`
   with 401/422/500.
-- Column names are **verbatim** from today's SQL so client edits are mechanical.
+- Column names are **verbatim** from today's SQL so client edits are mechanical. Each
+  endpoint has a pydantic row model in `rgs_interface.models`; the server validates every
+  response against it before returning.
 - List params (`patient_ids`) are repeated query params, cap 500, bound with
   `bindparam(..., expanding=True)`. Optional filters use `(:p IS NULL OR col = :p)`.
 - Dates in JSON are ISO strings, no timezone shift (alert relies on `dateStrings: true`).
