@@ -1,10 +1,11 @@
 # Deploy the RGS DB API
 
-Runs on the database host as a normal system service. No Docker, no git checkout.
-Needs Python 3.12, `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`) and the
-existing nginx.
-
 ## 1. MySQL user
+
+A dedicated account for the API, limited to what it does: read any table, insert into the
+two tables ai-cdss writes. Even with a stolen token, or a bug in the API, nothing else on
+the database can be changed. It connects from `localhost` only, so it is unusable from
+outside the server.
 
 ```sql
 CREATE USER 'api_user'@'localhost' IDENTIFIED BY '<password>';
